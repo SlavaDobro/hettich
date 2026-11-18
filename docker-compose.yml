@@ -1,0 +1,19 @@
+services:
+  hettich-materials:
+    build: .
+    image: hettich-materials:latest
+    container_name: hettich-materials
+    restart: unless-stopped
+    ports:
+      - "8765:8765"
+    environment:
+      # Поставьте 1, когда сайт будет работать за HTTPS
+      SECURE_COOKIES: "0"
+      # Предельный размер одного загружаемого файла, ГБ
+      MAX_UPLOAD_GB: "10"
+    volumes:
+      # Администратор загружает и удаляет файлы через сайт — поэтому на запись
+      - ./files:/app/files
+      - ./archives:/app/archives
+      - ./assets:/app/assets
+      - ./data:/app/data

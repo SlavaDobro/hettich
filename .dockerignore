@@ -1,0 +1,10 @@
+files
+archives
+assets
+data
+*.txt
+*.bat
+*.ps1
+*.md
+.git
+__pycache__
