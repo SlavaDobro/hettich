@@ -1,0 +1,353 @@
+<!doctype html>
+<!-- Демо-версия для GitHub Pages. Файл собран deploy/build-pages.py из web/ — правьте web/, не этот файл. -->
+
+<html lang="ru">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="robots" content="noindex, nofollow">
+<title>Демо · Сотрудники · Hettich · Полезные материалы</title>
+<link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'%3E%3Cg transform='skewY(-30) translate(0 18)'%3E%3Crect x='6' y='2' width='20' height='4' fill='%2300569d'/%3E%3Crect x='6' y='8' width='20' height='4' fill='%2300965f'/%3E%3Crect x='6' y='14' width='20' height='4' fill='%23fab900'/%3E%3Crect x='6' y='20' width='20' height='4' fill='%23e20613'/%3E%3C/g%3E%3C/svg%3E">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Open+Sans:wght@400;600;700&family=Roboto+Condensed:wght@700&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="web/app.css">
+<style>
+body { background: var(--mist); }
+.topbar { background: rgba(255, 255, 255, .95); }
+.page-head { padding: 44px 0 28px; display: flex; align-items: end; gap: 20px; flex-wrap: wrap; }
+.page-head h1 { margin: 8px 0 0; font: 700 clamp(40px, 5vw, 64px)/.95 var(--font-head); text-transform: uppercase; }
+.page-head .eyebrow { display: flex; align-items: center; gap: 12px; font-size: 13px; font-weight: 600; letter-spacing: .14em; text-transform: uppercase; color: var(--steel); }
+.page-head .eyebrow .stripes { gap: 2px; } .page-head .eyebrow .stripes i { width: 16px; height: 3px; }
+.page-head .btn { margin-left: auto; height: 50px; }
+
+.stats { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 16px; margin-bottom: 24px; }
+.stat { background: #fff; border-radius: 6px; padding: 20px 22px; position: relative; overflow: hidden; }
+.stat::before { content: ""; position: absolute; left: 0; top: 0; bottom: 0; width: 4px; background: var(--c); }
+.stat b { display: block; font: 700 40px/1 var(--font-head); }
+.stat span { font-size: 13px; color: var(--steel); }
+
+.layout { display: grid; grid-template-columns: minmax(0, 1fr) 270px; gap: 24px; align-items: start; }
+.box { background: #fff; border-radius: 6px; }
+.box-head { display: flex; align-items: center; gap: 12px; padding: 16px 20px; border-bottom: 1px solid var(--line); flex-wrap: wrap; }
+.box-head h2 { margin: 0; font-size: 16px; font-weight: 700; }
+.search { margin-left: auto; position: relative; }
+.search input { height: 38px; width: 240px; padding: 0 12px 0 36px; font-size: 14px; }
+.search svg { position: absolute; left: 11px; top: 10px; width: 18px; height: 18px; color: var(--steel); }
+
+table { width: 100%; border-collapse: collapse; font-size: 14px; }
+th { text-align: left; font-size: 11.5px; font-weight: 700; letter-spacing: .08em; text-transform: uppercase; color: var(--steel); padding: 12px 14px; border-bottom: 1px solid var(--line); white-space: nowrap; }
+td { padding: 14px 14px; border-bottom: 1px solid #eeeff0; vertical-align: middle; }
+th:first-child, td:first-child { padding-left: 20px; }
+th:last-child, td:last-child { padding-right: 20px; }
+tr:last-child td { border-bottom: 0; }
+tbody tr { transition: background .15s; }
+tbody tr:hover { background: #fafafa; }
+.person { display: flex; align-items: center; gap: 12px; min-width: 180px; }
+.person .role { font-size: 12.5px; }
+.person .avatar { width: 38px; height: 38px; flex: none; font-size: 13px; }
+.person .avatar.admin { background: linear-gradient(135deg, var(--s-blue), #0a3c69); }
+.person b { display: block; font-size: 14.5px; }
+.person small { color: var(--steel); font-size: 12.5px; }
+.mono { font-family: ui-monospace, "Cascadia Mono", Consolas, monospace; font-size: 13.5px; }
+.pill { display: inline-flex; align-items: center; gap: 6px; font-size: 12px; font-weight: 700; padding: 3px 10px; border-radius: 20px; white-space: nowrap; }
+.pill::before { content: ""; width: 6px; height: 6px; border-radius: 50%; background: currentColor; }
+.pill.ok { color: #08744b; background: #e3f4ec; }
+.pill.wait { color: #8a6400; background: #fff4d6; }
+.pill.off { color: #a0102a; background: #fbe6ea; }
+.role { font-size: 12px; font-weight: 700; color: var(--ink-2); }
+.role.admin { color: var(--s-blue); }
+.actions { display: flex; gap: 6px; justify-content: flex-end; }
+.act { width: 34px; height: 34px; border: 1px solid var(--line); border-radius: 4px; background: #fff; cursor: pointer; display: grid; place-items: center; color: var(--ink-2); }
+.act:hover { border-color: var(--ink); color: var(--ink); }
+.act.del:hover { border-color: var(--danger); color: var(--danger); }
+.act svg { width: 17px; height: 17px; }
+.act[disabled] { opacity: .3; pointer-events: none; }
+.switch { position: relative; display: inline-block; width: 40px; height: 22px; cursor: pointer; vertical-align: middle; }
+.switch input { position: absolute; opacity: 0; width: 100%; height: 100%; margin: 0; cursor: pointer; z-index: 1; }
+.switch span { position: absolute; inset: 0; background: #cfd1d5; border-radius: 11px; transition: background .2s; }
+.switch span::after { content: ""; position: absolute; left: 3px; top: 3px; width: 16px; height: 16px; border-radius: 50%; background: #fff; box-shadow: 0 1px 3px rgba(0,0,0,.25); transition: transform .2s var(--ease); }
+.switch input:checked + span { background: var(--ok); }
+.switch input:checked + span::after { transform: translateX(18px); }
+.switch input:focus-visible + span { outline: 2px solid var(--sky); outline-offset: 2px; }
+.muted { color: var(--steel); font-size: 13px; white-space: nowrap; }
+.empty { padding: 48px 20px; text-align: center; color: var(--steel); }
+
+.top-files { list-style: none; margin: 0; padding: 8px 0; }
+.top-files li { display: grid; grid-template-columns: 1fr auto; gap: 4px 12px; padding: 10px 20px; font-size: 13px; }
+.top-files li span { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.top-files li b { font-family: var(--font-head); font-size: 16px; }
+.top-files li i { grid-column: 1 / -1; height: 4px; background: var(--mist); border-radius: 2px; overflow: hidden; }
+.top-files li i::after { content: ""; display: block; height: 100%; width: var(--w); background: var(--ink); }
+.tip { padding: 18px 20px; font-size: 13px; color: var(--ink-2); line-height: 1.55; border-top: 1px solid var(--line); }
+.tip b { display: block; margin-bottom: 4px; }
+
+/* Модалка выдачи доступа */
+.ticket { border: 1px solid var(--line); border-radius: 6px; overflow: hidden; }
+.ticket-top { background: var(--ink); color: #fff; padding: 16px 18px; display: flex; align-items: center; gap: 12px; }
+.ticket-top .stripes i { width: 18px; height: 4px; } .ticket-top .stripes { gap: 2px; }
+.ticket-top b { font-size: 15px; } .ticket-top small { display: block; color: #a9acb5; font-size: 12px; }
+.cred { display: grid; grid-template-columns: 80px 1fr auto; align-items: center; gap: 12px; padding: 12px 18px; border-top: 1px dashed var(--line); }
+.cred:first-of-type { border-top: 0; }
+.cred span { font-size: 12px; font-weight: 700; color: var(--steel); text-transform: uppercase; letter-spacing: .08em; }
+.cred code { font: 600 17px ui-monospace, "Cascadia Mono", Consolas, monospace; word-break: break-all; }
+.warn { display: flex; gap: 10px; padding: 12px 14px; background: #fff7e0; border-radius: 4px; font-size: 13px; color: #6b4e00; }
+.share { display: grid; grid-template-columns: repeat(3, 1fr); gap: 8px; }
+.share .btn { height: 46px; padding: 0 10px; }
+.share .tg { --bg: #229ed9; } .share .tg:hover { background: #1b8bc0; }
+.row2 { display: grid; grid-template-columns: 1fr 1fr; gap: 14px; }
+.roles { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; }
+.roles label { display: block; border: 1px solid #cfd1d5; border-radius: 4px; padding: 12px 14px; cursor: pointer; font-size: 13px; color: var(--steel); }
+.roles label b { display: block; color: var(--ink); font-size: 14px; }
+.roles input { position: absolute; opacity: 0; }
+.roles input:checked + label { border-color: var(--ink); box-shadow: inset 0 0 0 1px var(--ink); }
+.roles input:focus-visible + label { outline: 2px solid var(--sky); }
+.hint-line { font-size: 12px; color: var(--steel); }
+
+@media (max-width: 1180px) {
+  .layout { grid-template-columns: 1fr; }
+}
+@media (max-width: 1020px) {
+  .stats { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+}
+@media (max-width: 720px) {
+  .page-head .btn { margin-left: 0; width: 100%; }
+  .search, .search input { width: 100%; margin-left: 0; }
+  .stat b { font-size: 32px; }
+  thead { display: none; }
+  table, tbody, tr, td { display: block; width: 100%; }
+  tr { padding: 14px 16px; border-bottom: 1px solid var(--line); }
+  td { padding: 4px 0; border: 0; }
+  td[data-l]::before { content: attr(data-l) ": "; color: var(--steel); font-size: 12px; }
+  .actions { justify-content: flex-start; margin-top: 8px; }
+  .row2, .share { grid-template-columns: 1fr; }
+}
+</style>
+</head>
+<body>
+<header class="topbar" id="topbar"></header>
+
+<main class="wrap">
+  <div class="page-head">
+    <div>
+      <div class="eyebrow"><span class="stripes" aria-hidden="true"><i></i><i></i><i></i><i></i></span>Администрирование</div>
+      <h1>Сотрудники</h1>
+    </div>
+    <button class="btn" id="add">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M12 5v14M5 12h14"/></svg>
+      Добавить сотрудника
+    </button>
+  </div>
+
+  <div class="stats" id="stats"></div>
+
+  <div class="layout">
+    <section class="box">
+      <div class="box-head">
+        <h2>Доступ к материалам</h2>
+        <label class="search"><span class="sr-only">Поиск</span>
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><circle cx="11" cy="11" r="7"/><path d="m20 20-4-4"/></svg>
+          <input class="input" id="q" placeholder="Поиск по имени или логину" autocomplete="off">
+        </label>
+      </div>
+      <div style="overflow-x:auto">
+        <table>
+          <thead><tr><th>Сотрудник</th><th>Логин</th><th>Статус</th><th>Последний вход</th><th>Загрузка</th><th>Скачал</th><th></th></tr></thead>
+          <tbody id="rows"></tbody>
+        </table>
+      </div>
+    </section>
+
+    <aside class="box">
+      <div class="box-head"><h2>Что скачивают</h2></div>
+      <ul class="top-files" id="top"></ul>
+      
+    </aside>
+  </div>
+</main>
+
+<footer class="foot">
+  <div class="wrap">
+    <div class="foot-brand"><span class="stripes" aria-hidden="true"><i></i><i></i><i></i><i></i></span>Hettich · Полезные материалы</div>
+  </div>
+</footer>
+
+<script src="web/demo.js"></script>
+<script src="web/common.js"></script>
+<script>
+const I = {
+  reset: ICON.key,
+  lock: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7"><rect x="4" y="10" width="16" height="11" rx="2"/><path d="M8 10V7a4 4 0 0 1 8 0v3"/></svg>',
+  unlock: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7"><rect x="4" y="10" width="16" height="11" rx="2"/><path d="M8 10V7a4 4 0 0 1 7.5-2"/></svg>',
+  del: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round"><path d="M4 7h16M9 7V4h6v3M6 7l1 13h10l1-13M10 11v6M14 11v6"/></svg>',
+};
+// «сегодня, 11:47», «вчера, 09:10», «12 нояб., 15:30», в прошлые годы — с годом
+function shortDate(ts) {
+  if (!ts) return '—';
+  const d = new Date(ts * 1000), now = new Date();
+  const t = d.toLocaleTimeString('ru-RU', { hour: '2-digit', minute: '2-digit' });
+  const day = (x) => new Date(x.getFullYear(), x.getMonth(), x.getDate()).getTime();
+  const diff = Math.round((day(now) - day(d)) / 86400000);
+  if (diff === 0) return 'сегодня, ' + t;
+  if (diff === 1) return 'вчера, ' + t;
+  return d.toLocaleDateString('ru-RU', d.getFullYear() === now.getFullYear() ? { day: 'numeric', month: 'short' } : { day: 'numeric', month: 'short', year: 'numeric' }) + ', ' + t;
+}
+const niceFile = (f) => f.title
+  || (f.path.startsWith('archives/') ? 'Архив «всё» .' + f.path.split('.').pop()
+    : f.path.startsWith('zip/') ? 'Выбранное одним ZIP' : f.path.split('/').pop() + ' (удалён)');
+
+let state = { users: [], downloads: { total: 0, by_file: [] }, me: 0 };
+
+async function load() {
+  state = await api('/api/users');
+  render();
+}
+
+function statusOf(u) {
+  if (!u.active) return ['off', 'Заблокирован'];
+  if (!u.last_login) return ['wait', 'Ещё не входил'];
+  if (u.must_change) return ['wait', 'Временный пароль'];
+  return ['ok', 'Активен'];
+}
+
+function render() {
+  const us = state.users;
+  $('#stats').innerHTML = [
+    ['var(--s-blue)', us.length, 'всего в системе'],
+    ['var(--s-green)', us.filter((u) => u.active && u.last_login).length, 'уже пользуются'],
+    ['var(--s-yellow)', us.filter((u) => u.active && !u.last_login).length, 'ещё не входили'],
+    ['var(--s-red)', state.downloads.total, 'скачиваний'],
+  ].map(([c, n, l]) => `<div class="stat" style="--c:${c}"><b>${n}</b><span>${l}</span></div>`).join('');
+
+  const q = $('#q').value.trim().toLowerCase();
+  const list = us.filter((u) => !q || (u.name + ' ' + u.login + ' ' + u.position).toLowerCase().includes(q));
+  $('#rows').innerHTML = list.length ? list.map((u) => {
+    const [cls, label] = statusOf(u);
+    const self = u.id === state.me;
+    return `<tr data-id="${u.id}">
+      <td><div class="person"><span class="avatar ${u.role === 'admin' ? 'admin' : ''}">${esc(initials(u.name))}</span>
+        <span><b>${esc(u.name)}${self ? ' <span class="muted">· вы</span>' : ''}</b><small>${u.role === 'admin' ? '<span class="role admin">Администратор</span>' : ''}${u.role === 'admin' && u.position ? ' · ' : ''}${esc(u.position || (u.role === 'admin' ? '' : 'Сотрудник'))}</small></span></div></td>
+      <td data-l="Логин"><span class="mono">${esc(u.login)}</span></td>
+      <td><span class="pill ${cls}">${label}</span></td>
+      <td data-l="Последний вход"><span class="muted">${shortDate(u.last_login)}</span></td>
+      <td data-l="Загрузка">${u.role === 'admin' ? '<span class="muted">всегда</span>' : `<label class="switch" title="Может загружать файлы на сайт"><input type="checkbox" data-up="${u.id}" ${u.can_upload ? 'checked' : ''} aria-label="Может загружать файлы: ${esc(u.name)}"><span></span></label>`}</td>
+      <td data-l="Скачал"><span class="muted">${u.downloads} ${u.downloads === 1 ? 'файл' : (u.downloads % 10 >= 2 && u.downloads % 10 <= 4 && (u.downloads % 100 < 10 || u.downloads % 100 >= 20)) ? 'файла' : 'файлов'}</span></td>
+      <td><div class="actions">
+        <button class="act" data-a="reset" title="Выдать новый пароль" aria-label="Выдать новый пароль">${I.reset}</button>
+        <button class="act" data-a="toggle" title="${u.active ? 'Заблокировать' : 'Разблокировать'}" aria-label="${u.active ? 'Заблокировать' : 'Разблокировать'}" ${self ? 'disabled' : ''}>${u.active ? I.lock : I.unlock}</button>
+        <button class="act del" data-a="del" title="Удалить" aria-label="Удалить" ${self ? 'disabled' : ''}>${I.del}</button>
+      </div></td></tr>`;
+  }).join('') : `<tr><td colspan="7" class="empty">${q ? 'Никого не нашли' : 'Пока никого нет — добавьте первого сотрудника'}</td></tr>`;
+
+  const max = Math.max(1, ...state.downloads.by_file.map((f) => f.n));
+  $('#top').innerHTML = state.downloads.by_file.length
+    ? state.downloads.by_file.slice(0, 8).map((f) => `<li><span title="${esc(f.path)}">${esc(niceFile(f))}</span><b>${f.n}</b><i style="--w:${f.n / max * 100}%"></i></li>`).join('')
+    : '<li><span class="muted">Пока ничего не скачивали</span></li>';
+}
+
+/* --- транслитерация для подсказки логина: «Иван Петров» → i.petrov --- */
+const TR = { а: 'a', б: 'b', в: 'v', г: 'g', д: 'd', е: 'e', ё: 'e', ж: 'zh', з: 'z', и: 'i', й: 'y', к: 'k', л: 'l', м: 'm', н: 'n', о: 'o', п: 'p', р: 'r', с: 's', т: 't', у: 'u', ф: 'f', х: 'kh', ц: 'ts', ч: 'ch', ш: 'sh', щ: 'shch', ъ: '', ы: 'y', ь: '', э: 'e', ю: 'yu', я: 'ya', і: 'i', ї: 'yi', є: 'ye', ґ: 'g' };
+const translit = (s) => s.toLowerCase().split('').map((c) => TR[c] ?? c).join('').replace(/[^a-z0-9]/g, '');
+function suggestLogin(name) {
+  const p = name.trim().split(/\s+/).filter(Boolean);
+  if (!p.length) return '';
+  if (p.length === 1) return translit(p[0]);
+  return translit(p[0])[0] + '.' + translit(p[1]);  // Имя Фамилия → i.familiya
+}
+
+function addModal() {
+  const m = modal(`
+    <div class="modal-head"><h3>Новый сотрудник</h3><p>Пароль придумает система.</p></div>
+    <form class="modal-body" autocomplete="off">
+      <div class="field"><label for="f-name">Имя и фамилия</label><input class="input" id="f-name" required placeholder="Иван Петров"></div>
+      <div class="row2">
+        <div class="field"><label for="f-login">Логин</label><input class="input mono" id="f-login" required placeholder="i.petrov" autocapitalize="off" spellcheck="false"></div>
+        <div class="field"><label for="f-pos">Должность <span class="muted">(необязательно)</span></label><input class="input" id="f-pos" placeholder="Менеджер"></div>
+      </div>
+      <div class="field"><label>Роль</label>
+        <div class="roles">
+          <div><input type="radio" name="role" id="r-user" value="user" checked><label for="r-user"><b>Сотрудник</b>Смотрит и скачивает</label></div>
+          <div><input type="radio" name="role" id="r-admin" value="admin"><label for="r-admin"><b>Администратор</b>Ещё и выдаёт доступы</label></div>
+        </div>
+      </div>
+      <label class="check"><input type="checkbox" id="f-up" checked> Может загружать файлы</label>
+      <div class="form-error" aria-live="polite"></div>
+      <button class="btn block" type="submit">Создать доступ</button>
+    </form>`);
+  const f = $('form', m.el), name = $('#f-name', f), login = $('#f-login', f);
+  let touched = false;
+  login.oninput = () => { touched = true; };
+  name.oninput = () => { if (!touched) login.value = suggestLogin(name.value); };
+  f.onsubmit = async (e) => {
+    e.preventDefault();
+    const err = $('.form-error', f);
+    err.textContent = '';
+    try {
+      const r = await api('/api/users', { name: name.value, login: login.value, position: $('#f-pos', f).value, role: $('input[name=role]:checked', f).value, can_upload: $('#f-up', f).checked });
+      m.close();
+      credsModal(r, 'Доступ создан');
+      load();
+    } catch (ex) { err.textContent = ex.message; }
+  };
+}
+
+function credsModal(r, title) {
+  const site = new URL(SITE.home, location.href).href.replace(/\/$/, '');
+  const msg = `Привет! Тебе открыт доступ к «Hettich · Полезные материалы» — видео, презентации и картинки Hettich.\n\nСайт: ${site}\nЛогин: ${r.login}\nПароль: ${r.password}\n\nПри первом входе система попросит придумать свой пароль.`;
+  const m = modal(`
+    <div class="modal-head"><h3>${title}</h3><p>${esc(r.name)} — отправьте эти данные сотруднику.</p></div>
+    <div class="modal-body">
+      <div class="ticket">
+        <div class="ticket-top"><span class="stripes" aria-hidden="true"><i></i><i></i><i></i><i></i></span><div><b>Hettich · Полезные материалы</b><small>${esc(site)}</small></div></div>
+        <div class="cred"><span>Логин</span><code>${esc(r.login)}</code><button class="act" data-c="${esc(r.login)}" aria-label="Скопировать логин">${ICON.copy}</button></div>
+        <div class="cred"><span>Пароль</span><code>${esc(r.password)}</code><button class="act" data-c="${esc(r.password)}" aria-label="Скопировать пароль">${ICON.copy}</button></div>
+      </div>
+      <div class="warn">⚠ Пароль виден только сейчас.</div>
+      <div class="share">
+        <a class="btn tg" target="_blank" rel="noopener" href="https://t.me/share/url?url=${encodeURIComponent(site)}&text=${encodeURIComponent(msg.replace('Сайт: ' + site + '\n', ''))}">${ICON.telegram}Telegram</a>
+        <a class="btn light" href="mailto:?subject=${encodeURIComponent('Доступ к Hettich · Полезные материалы')}&body=${encodeURIComponent(msg)}">${ICON.mail}Почта</a>
+        <button class="btn ghost" data-msg>${ICON.copy}Текст</button>
+      </div>
+    </div>`);
+  $$('[data-c]', m.el).forEach((b) => b.onclick = () => copyText(b.dataset.c));
+  $('[data-msg]', m.el).onclick = () => copyText(msg);
+}
+
+$('#rows').addEventListener('click', async (e) => {
+  const b = e.target.closest('[data-a]');
+  if (!b) return;
+  const u = state.users.find((x) => x.id === +b.closest('tr').dataset.id);
+  try {
+    if (b.dataset.a === 'reset') {
+      if (!await confirmModal('Новый пароль?', `«${esc(u.name)}» получит новый временный пароль, старый перестанет работать.`, 'Выдать пароль')) return;
+      credsModal(await api(`/api/users/${u.id}/reset`, {}), 'Новый пароль');
+    } else if (b.dataset.a === 'toggle') {
+      if (u.active && !await confirmModal('Заблокировать?', `«${esc(u.name)}» потеряет доступ. Вернуть можно в любой момент.`, 'Заблокировать', true)) return;
+      await api(`/api/users/${u.id}/active`, { active: !u.active });
+      toast(u.active ? 'Доступ приостановлен' : 'Доступ восстановлен');
+    } else if (b.dataset.a === 'del') {
+      if (!await confirmModal('Удалить сотрудника?', `«${esc(u.name)}» будет удалён. Восстановить будет нельзя.`, 'Удалить', true)) return;
+      await api(`/api/users/${u.id}/delete`, {});
+      toast('Сотрудник удалён');
+    }
+    load();
+  } catch (ex) { toast(ex.message); }
+});
+
+$('#rows').addEventListener('change', async (e) => {
+  const sw = e.target.closest('input[data-up]');
+  if (!sw) return;
+  try {
+    await api(`/api/users/${sw.dataset.up}/upload`, { can_upload: sw.checked });
+    const u = state.users.find((x) => x.id === +sw.dataset.up);
+    if (u) u.can_upload = sw.checked;
+    toast(sw.checked ? 'Загрузка файлов разрешена' : 'Загрузка файлов отключена');
+  } catch (ex) { sw.checked = !sw.checked; toast(ex.message); }
+});
+
+$('#q').oninput = render;
+$('#add').onclick = addModal;
+mountTopbar('admin').then(load);
+</script>
+</body>
+</html>

@@ -1,0 +1,72 @@
+<!doctype html>
+<!-- Демо-версия для GitHub Pages. Файл собран deploy/build-pages.py из web/ — правьте web/, не этот файл. -->
+
+<html lang="ru">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="robots" content="noindex, nofollow">
+<title>Демо · Все материалы · Hettich · Полезные материалы</title>
+<link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'%3E%3Cg transform='skewY(-30) translate(0 18)'%3E%3Crect x='6' y='2' width='20' height='4' fill='%2300569d'/%3E%3Crect x='6' y='8' width='20' height='4' fill='%2300965f'/%3E%3Crect x='6' y='14' width='20' height='4' fill='%23fab900'/%3E%3Crect x='6' y='20' width='20' height='4' fill='%23e20613'/%3E%3C/g%3E%3C/svg%3E">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Open+Sans:wght@400;600;700&family=Roboto+Condensed:wght@700&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="web/app.css">
+<link rel="stylesheet" href="web/materials.css">
+</head>
+<body data-page="all">
+<header class="topbar" id="topbar"></header>
+
+<main>
+  <section class="page-top">
+    <div class="wrap">
+      <div>
+        <nav class="crumbs" aria-label="Навигация"><a href="index.html">Главная</a><span>/</span>Все материалы</nav>
+        <h1 class="page-title">Все материалы <span id="total-count"></span></h1>
+      </div>
+      <div class="page-top-side" id="page-side"></div>
+    </div>
+  </section>
+
+  <div class="toolbar" id="toolbar">
+    <div class="wrap">
+      <div class="tabs" role="tablist" aria-label="Разделы" id="tabs"></div>
+      <div class="tools">
+        <label class="sort"><span class="sr-only">Сортировка</span>
+          <select id="sort">
+            <option value="new">Сначала новые</option>
+            <option value="old">Сначала старые</option>
+            <option value="name">По названию</option>
+            <option value="size">Сначала большие</option>
+          </select>
+        </label>
+        <div class="view" role="group" aria-label="Вид">
+          <button data-view="grid" aria-label="Плиткой" title="Плиткой"></button>
+          <button data-view="list" aria-label="Списком" title="Списком"></button>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <div class="wrap">
+    <div class="result-head" id="result-head"></div>
+    <section id="items" aria-live="polite"></section>
+  </div>
+</main>
+
+<footer class="foot">
+  <div class="wrap">
+    <div class="foot-brand"><span class="stripes" aria-hidden="true"><i></i><i></i><i></i><i></i></span>Hettich · Полезные материалы</div>
+  </div>
+</footer>
+
+<div class="selbar" id="selbar" hidden></div>
+<div class="drop-overlay" id="drop" hidden><div><span class="stripes" aria-hidden="true"><i></i><i></i><i></i><i></i></span><b>Отпустите, чтобы загрузить</b></div></div>
+<div class="uploads" id="uploads" hidden></div>
+<input type="file" id="file-input" multiple hidden>
+
+<script src="web/demo.js"></script>
+<script src="web/common.js"></script>
+<script src="web/materials.js"></script>
+</body>
+</html>
