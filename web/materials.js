@@ -53,9 +53,9 @@ const fmtDay = (ts) => new Date(ts * 1000).toLocaleDateString('ru-RU', { day: 'n
 const kindOf = (name) => { const e = name.split('.').pop().toLowerCase(); return Object.keys(KIND_BY_EXT).find((k) => KIND_BY_EXT[k].split(' ').includes(e)) || 'other'; };
 const byId = (id) => S.items.find((m) => m.id === +id);
 const dlUrl = (m) => m.url + '?dl=1';
-const itemLink = (id) => location.origin + '/all#m-' + id;  // ссылка на файл: откроется в каталоге
+const itemLink = (id) => new URL(SITE.all + '#m-' + id, location.href).href;  // ссылка на файл: откроется в каталоге
 const isNew = (m) => Date.now() / 1000 - m.created_at < WEEK;
-const slideUrl = (m, n) => `/assets/${m.meta.slides_dir}/slide${String(n).padStart(2, '0')}.jpg`;
+const slideUrl = (m, n) => `${SITE.assets}/${m.meta.slides_dir}/slide${String(n).padStart(2, '0')}.${m.meta.slide_ext || 'jpg'}`;
 const canPreview = (m) => (m.kind === 'video' && PLAYABLE.has(m.ext)) || m.meta.slides || VIEWABLE_IMG.has(m.ext) || INLINE_DOC.has(m.ext);
 const hl = (text) => {
   const t = esc(text);
@@ -121,7 +121,7 @@ function renderHome() {
   const kinds = Object.entries(KIND).filter(([k]) => counts[k]);
   $('#kinds-block').hidden = kinds.length < 2;
   $('#kinds').innerHTML = kinds.map(([k, v]) => `
-    <a class="kind-tile" href="/all?kind=${k}" style="--kc:${v.color}">
+    <a class="kind-tile" href="${SITE.all}?kind=${k}" style="--kc:${v.color}">
       <span class="ki">${v.icon}</span><b>${v.name}</b>
       <span>${counts[k]} ${plural(counts[k], 'файл', 'файла', 'файлов')} · ${fmtSize(sizes[k])}</span>
       <span class="arr">${ICON.arrow}</span>
@@ -133,13 +133,13 @@ function renderHome() {
 
   const latest = S.items.filter((m) => !m.pinned).sort((a, b) => b.created_at - a.created_at).slice(0, LATEST_ON_HOME);
   $('#latest-head').innerHTML = `<h2 id="h-latest">Новые поступления</h2>
-    <a class="more" href="/all">Все материалы · ${S.items.length} ${ICON.arrow}</a>
+    <a class="more" href="${SITE.all}">Все материалы · ${S.items.length} ${ICON.arrow}</a>
     ${S.canUpload ? `<button class="btn small" data-upload>${ICON.upload}Загрузить</button>` : ''}`;
   $('#items').innerHTML = !S.items.length
     ? `<div class="empty-state"><b>Здесь пока пусто</b>${S.canUpload ? 'Нажмите «Загрузить» вверху.' : 'Администратор скоро добавит материалы.'}
        ${S.canUpload ? `<br><button class="btn" data-upload>${ICON.upload}Загрузить файлы</button>` : ''}</div>`
     : latest.length ? `<div class="grid">${latest.map((m) => cardHtml(m, false)).join('')}</div>` : '';
-  $('#all-cta').innerHTML = S.items.length ? `<a href="/all"><span><b>Все материалы</b></span><span class="go">${ICON.arrow}</span></a>` : '';
+  $('#all-cta').innerHTML = S.items.length ? `<a href="${SITE.all}"><span><b>Все материалы</b></span><span class="go">${ICON.arrow}</span></a>` : '';
   const cta = $('#hero-cta');
   if (cta) cta.innerHTML = `Все материалы · ${S.items.length} ${ICON.arrow}`;
   bindMedia();
@@ -150,7 +150,7 @@ function renderPageTop() {
   const total = S.items.reduce((s, m) => s + m.size, 0);
   $('#total-count').textContent = S.items.length;
   $('#page-side').innerHTML = `<span><b>${S.items.length}</b> ${plural(S.items.length, 'файл', 'файла', 'файлов')} · <b>${fmtSize(total)}</b></span>
-    <a href="/#pack">${ICON.archive}Скачать всё архивом</a>`;
+    <a href="${SITE.home}#pack">${ICON.archive}Скачать всё архивом</a>`;
 }
 
 function syncUrl() {
@@ -159,7 +159,7 @@ function syncUrl() {
   if (S.kind !== 'all') p.set('kind', S.kind);
   if (S.q) p.set('q', S.q);
   const qs = p.toString();
-  history.replaceState(null, '', '/all' + (qs ? '?' + qs : '') + location.hash);
+  history.replaceState(null, '', location.pathname + (qs ? '?' + qs : '') + location.hash);
 }
 
 function renderFacts() {
@@ -327,7 +327,7 @@ function renderSelbar() {
     ${!allVisible ? `<button class="btn small light" data-selall>Выбрать все (${visible.length})</button>` : ''}
     <button class="btn small light" data-selnone>Снять</button>
     ${mine.length ? `<span class="sep"></span><button class="btn small del" data-seldel>${ICON.trash}Удалить${mine.length < items.length ? ` свои (${mine.length})` : ''}</button>` : ''}
-    <a class="btn small white" href="/zip?ids=${items.map((m) => m.id).join(',')}" download>${ICON.download}Скачать ZIP</a>`;
+    <a class="btn small white" href="${SITE.zip}?ids=${items.map((m) => m.id).join(',')}" download>${ICON.download}Скачать ZIP</a>`;
 }
 
 /* Удаление нескольких выбранных (только админ) */
@@ -363,7 +363,7 @@ async function renderFormats() {
   $('#formats').innerHTML = ARCHIVE_FORMATS.map((f) => {
     const a = info[f.ext];
     if (!a) return `<div class="fmt off" style="--c:${f.color}"><span class="tag">${f.label}</span><span><b>Архив .${f.ext}</b><small>${r.building ? 'Собирается…' : 'Недоступен на этом сервере'}</small></span></div>`;
-    return `<a class="fmt" style="--c:${f.color}" href="/archives/${encodeURIComponent(a.name)}?dl=1" download title="${esc(a.name)}">
+    return `<a class="fmt" style="--c:${f.color}" href="${SITE.archives}/${encodeURIComponent(a.name)}?dl=1" download title="${esc(a.name)}">
       <span class="tag">${f.label}</span>
       <span><b>Архив .${f.ext}</b><small>${f.hint}</small></span>
       <span class="go">${fmtSize(a.size)}${ICON.download}</span></a>`;
@@ -476,7 +476,7 @@ function mountPlayer(box, m, handlers) {
   v.volume = savedVol;
   v.muted = savedMuted;
 
-  const pct = (x) => (v.duration ? x / v.duration * 100 : 0);
+  const pct = (x) => (v.duration && isFinite(v.duration) ? x / v.duration * 100 : 0);
   const paintSeek = () => {
     const p = scrubbing ? seek.value / 10 : pct(v.currentTime);
     let b = 0;
@@ -486,7 +486,7 @@ function mountPlayer(box, m, handlers) {
     if (!scrubbing) seek.value = Math.round(p * 10);
     seek.setAttribute('aria-valuetext', `${fmtDur(v.currentTime) || '0:00'} из ${fmtDur(v.duration)}`);
   };
-  const paintTime = () => { cur.textContent = fmtDur(v.currentTime) || '0:00'; };
+  const paintTime = () => { if (isFinite(v.duration)) cur.textContent = fmtDur(v.currentTime) || '0:00'; };
   const paintPlay = () => {
     const playing = !v.paused && !v.ended;
     playBtn.innerHTML = playing ? ICON.pause : ICON.play;
@@ -521,7 +521,7 @@ function mountPlayer(box, m, handlers) {
   };
 
   // события видео
-  v.addEventListener('loadedmetadata', () => { dur.textContent = fmtDur(v.duration); paintSeek(); });
+  v.addEventListener('loadedmetadata', async () => { await ensureDuration(v); dur.textContent = fmtDur(v.duration); paintTime(); paintSeek(); });
   v.addEventListener('timeupdate', () => { paintTime(); if (!scrubbing) paintSeek(); });
   v.addEventListener('progress', paintSeek);
   ['play', 'pause', 'ended'].forEach((e) => v.addEventListener(e, paintPlay));
@@ -835,6 +835,7 @@ async function makeCover(file) {
       const v = document.createElement('video');
       v.muted = true; v.playsInline = true; v.preload = 'auto'; v.src = url;
       await withTimeout(new Promise((ok, bad) => { v.onloadedmetadata = ok; v.onerror = bad; }), 15000);
+      await withTimeout(ensureDuration(v), 10000).catch(() => {});
       const h = v.videoHeight;
       const meta = { duration: Math.round(v.duration * 10) / 10, width: v.videoWidth, height: h,
         quality: h >= 2160 ? '4K' : h >= 1080 ? 'Full HD' : h >= 720 ? 'HD' : 'SD' };
@@ -866,6 +867,22 @@ async function makeCover(file) {
   } finally { URL.revokeObjectURL(url); }
 }
 const withTimeout = (p, ms) => Promise.race([p, new Promise((_, bad) => setTimeout(() => bad(new Error('timeout')), ms))]);
+
+/* У видео, записанных в браузере (запись экрана, MediaRecorder), длительность сначала «бесконечная».
+   Перемотка в самый конец заставляет браузер её посчитать. */
+function ensureDuration(v) {
+  return new Promise((ok) => {
+    if (isFinite(v.duration)) return ok();
+    const onDur = () => {
+      if (!isFinite(v.duration)) return;
+      v.removeEventListener('durationchange', onDur);
+      v.currentTime = 0;
+      ok();
+    };
+    v.addEventListener('durationchange', onDur);
+    v.currentTime = 1e101;
+  });
+}
 
 /* =============================== Редактирование (админ) =============================== */
 function editModal(m) {

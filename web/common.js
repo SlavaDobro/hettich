@@ -1,4 +1,9 @@
 /* Hettich · Полезные материалы — общие функции для страниц */
+/* Адреса страниц и файлов. На своём сервере — короткие пути (/all),
+   в демо-версии на GitHub Pages их подменяет window.SITE (all.html и т. п.) */
+const SITE = Object.assign({ home: '/', all: '/all', admin: '/admin', login: '/login',
+  assets: '/assets', zip: '/zip', archives: '/archives' }, window.SITE || {});
+
 const LOGO = `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 500 310" role="img" aria-label="Hettich"><path fill="#00569d" d="m308.5 104.8 140.7-81V0L308.5 81.1V105z"/><path fill="#00965f" d="m308.5 138 140.7-81.1V33.1l-140.7 81.2V138z"/><path fill="#fab900" d="m308.5 171.1 140.7-81V66.2l-140.7 81.1v23.8z"/><path fill="#e20613" d="m308.5 204.1 140.7-81V99.4l-140.7 81.2v23.7z"/><path fill="currentColor" d="M277.8 165v45h26.4v20.2h-26.4v41c-.5 16.3 5.2 17.5 9.6 17.9h1.6l.1.1c4.1.1 12.2-2.3 12.2-2.3v20.7s-11.5 2-19.3 2h-.3c-6-.3-30.3.8-30-27.2v-52.2h-30.5v44.6l.1 2v.5c.5 6 2.3 11.8 11.2 12 3.1 0 12.2-2.4 12.2-2.4v20.7s-6.2 1-12.8 1.5h-.7l-.7.2h-1.4c-2.1.2-4.2.3-6 .2h-.3c-8.9-.5-27.5.2-27.7-27v-52.3h-17.5V210h17.5v-30l26-15v45h30.7v-30zm-136.6 42.7c40 .6 36.4 41.5 36.4 47.9H125c.3 4 2.2 20.3 16 29.4l.4.3c13.2 9.1 32.8-.2 34-.8V305s-13.3 5-27.1 4.5h-.5c-8.6 0-47.1-1.3-47.4-54.2v-1.6c0-13 2.2-44.1 39.6-46zm-1.6 19.2c-9.3 0-12.3 7-13.3 9.8v.2l-.3.7h26.4a12 12 0 0 0-12.4-10.7zm-71.4 80.7V256h-41v51.6H0V180h27.2v54.6h41V180h27.2v127.6zm270.8-53c.9-40.7 28.3-46.7 43.4-46.7 36.2 0 36.5 28.4 36.5 38.9h-27.4s2.3-19-10.9-18.6c-12.6.4-14.4 16-14.4 22.6a45 45 0 0 0 7.8 26 30.7 30.7 0 0 0 26.3 12.5c6 0 12-1.2 17.6-3.4v18.8s-14.2 5-28.7 5c-13.8 0-49.8-4-50.2-55zm135 53v-55.4c.2-19-2-19-6.6-18.8-14.7.3-18.4 24.7-18.2 31.7h-.1v42.5h-26V180l26-15v55.3c1.1-1.6 10-12.7 24.1-12.3 7.1 0 26.6 3.2 26.8 33v66.6zm-165.5 0V210h26v97.6z"/></svg>`;
 
 const ICON = {
@@ -34,7 +39,7 @@ async function api(path, body, method) {
   const r = await fetch(path, opts);
   let data = {};
   try { data = await r.json(); } catch (_) { /* пусто */ }
-  if (r.status === 401 && !path.endsWith('/login') && !path.endsWith('/password')) { location.href = '/login'; }
+  if (r.status === 401 && !path.endsWith('/login') && !path.endsWith('/password')) { location.href = SITE.login; }
   if (!r.ok) throw new Error(data.error || 'Ошибка ' + r.status);
   return data;
 }
@@ -159,17 +164,17 @@ async function mountTopbar(active) {
   const bar = $('#topbar');
   bar.innerHTML = `
     <div class="wrap">
-      <a class="brand" href="/" aria-label="На главную">${LOGO}<span class="brand-sep"></span>
+      <a class="brand" href="${SITE.home}" aria-label="На главную">${LOGO}<span class="brand-sep"></span>
         <span class="brand-title">Полезные материалы<small>для сотрудников и партнёров</small></span></a>
-      <form class="hsearch" role="search" action="/all">
+      <form class="hsearch" role="search" action="${SITE.all}">
         <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" aria-hidden="true"><circle cx="11" cy="11" r="7"/><path d="m20 20-4-4"/></svg>
         <input id="hq" name="q" type="search" placeholder="Поиск по материалам" autocomplete="off" aria-label="Поиск по материалам">
         <kbd aria-hidden="true">/</kbd>
       </form>
       <nav>
-        <a class="nav-link nav-main" href="/all" ${active === 'all' ? 'aria-current="page"' : ''}>${ICON.grid}<span class="label">Все материалы</span></a>
+        <a class="nav-link nav-main" href="${SITE.all}" ${active === 'all' ? 'aria-current="page"' : ''}>${ICON.grid}<span class="label">Все материалы</span></a>
         ${me.role === 'admin' ? `
-          <a class="nav-link" href="/admin" ${active === 'admin' ? 'aria-current="page"' : ''}>${ICON.users}<span class="label">Сотрудники</span></a>` : ''}
+          <a class="nav-link" href="${SITE.admin}" ${active === 'admin' ? 'aria-current="page"' : ''}>${ICON.users}<span class="label">Сотрудники</span></a>` : ''}
         ${me.can_upload ? `<button class="btn hup" id="hup" type="button" title="Загрузить файлы на сайт">${ICON.upload}<span class="label">Загрузить</span></button>` : ''}
         <div class="user-menu">
           <button class="nav-link user-btn" aria-haspopup="true" aria-expanded="false">
@@ -189,7 +194,7 @@ async function mountTopbar(active) {
   btn.onclick = (e) => { e.stopPropagation(); const o = dd.classList.toggle('open'); btn.setAttribute('aria-expanded', o); };
   document.addEventListener('click', () => { dd.classList.remove('open'); btn.setAttribute('aria-expanded', 'false'); });
   $('[data-act=pw]', bar).onclick = () => passwordModal(false);
-  $('[data-act=out]', bar).onclick = async () => { await api('/api/logout', {}); location.href = '/login'; };
+  $('[data-act=out]', bar).onclick = async () => { await api('/api/logout', {}); location.href = SITE.login; };
 
   // Поиск в шапке: на странице «Все материалы» фильтрует сразу, на остальных — ведёт туда
   const hq = $('#hq', bar);
@@ -206,7 +211,7 @@ async function mountTopbar(active) {
     e.preventDefault();
     const q = hq.value.trim();
     if (window.onHeaderSearch) { window.onHeaderSearch(q); hq.blur(); }
-    else location.href = '/all' + (q ? '?q=' + encodeURIComponent(q) : '');
+    else location.href = SITE.all + (q ? '?q=' + encodeURIComponent(q) : '');
   };
   document.addEventListener('keydown', (e) => {
     if (e.key === '/' && !e.target.matches('input, textarea, select') && !$('.viewer, .modal-back')) { e.preventDefault(); hq.focus(); }
@@ -214,7 +219,7 @@ async function mountTopbar(active) {
 
   // Кнопка «Загрузить»: на страницах с материалами открывает окно, на остальных — ведёт в каталог
   const hup = $('#hup', bar);
-  if (hup) hup.onclick = () => (window.openUpload ? window.openUpload() : (location.href = '/all?upload=1'));
+  if (hup) hup.onclick = () => (window.openUpload ? window.openUpload() : (location.href = SITE.all + '?upload=1'));
   if (me.role === 'admin') {
     $('[data-act=rk]', bar).onclick = () => recoveryModal(me);
     // Напоминание, пока у администратора нет ключа восстановления
@@ -353,7 +358,7 @@ function recoverModal(prefillLogin) {
     try {
       await api('/api/recover', { login: $('#rc-login', f).value.trim(), key: $('#rc-key', f).value, new: $('#rc-new', f).value });
       m.close();
-      location.href = '/';
+      location.href = SITE.home;
     } catch (ex) { err.textContent = ex.message; }
   };
 }

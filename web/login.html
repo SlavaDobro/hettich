@@ -99,7 +99,7 @@ $('#form').onsubmit = async (e) => {
   go.disabled = true; go.textContent = 'Проверяем…';
   try {
     await api('/api/login', { login: $('#login').value.trim(), password: $('#password').value });
-    location.href = '/';
+    location.href = SITE.home;
   } catch (ex) {
     err.textContent = ex.message;
     $('#form').classList.remove('shake'); void $('#form').offsetWidth; $('#form').classList.add('shake');

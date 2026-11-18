@@ -288,7 +288,7 @@ function addModal() {
 }
 
 function credsModal(r, title) {
-  const site = location.origin;
+  const site = new URL(SITE.home, location.href).href.replace(/\/$/, '');
   const msg = `Привет! Тебе открыт доступ к «Hettich · Полезные материалы» — видео, презентации и картинки Hettich.\n\nСайт: ${site}\nЛогин: ${r.login}\nПароль: ${r.password}\n\nПри первом входе система попросит придумать свой пароль.`;
   const m = modal(`
     <div class="modal-head"><h3>${title}</h3><p>${esc(r.name)} — отправьте эти данные сотруднику.</p></div>
