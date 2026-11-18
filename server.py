@@ -8,6 +8,7 @@
 
 Переменные окружения:
     HOST (127.0.0.1), PORT (8765), SECURE_COOKIES=1 — когда сайт работает по HTTPS,
+    TRUST_PROXY=1 — когда перед сервером стоит прокси (Caddy/nginx),
     MAX_UPLOAD_GB (10) — предельный размер одного загружаемого файла.
 """
 import contextlib, hashlib, hmac, http.server, json, mimetypes, os, re, secrets, shutil, sqlite3
@@ -21,6 +22,9 @@ COVERS = os.path.join(ROOT, "assets", "covers")
 HOST = os.environ.get("HOST", "127.0.0.1")
 PORT = int(os.environ.get("PORT", "8765"))
 SECURE = os.environ.get("SECURE_COOKIES") == "1"
+# За прокси (Caddy/nginx) настоящий адрес посетителя приходит в X-Forwarded-For.
+# Включайте только когда сервер недоступен напрямую, иначе заголовок можно подделать.
+TRUST_PROXY = os.environ.get("TRUST_PROXY") == "1"
 MAX_UPLOAD = int(float(os.environ.get("MAX_UPLOAD_GB", "10")) * 1024 ** 3)
 SESSION_DAYS = 30
 COOKIE = "hm_session"
@@ -412,8 +416,15 @@ def normalize_key(key):
 class Handler(http.server.BaseHTTPRequestHandler):
     server_version = "HettichMaterials/2.0"
 
+    def client_ip(self):
+        if TRUST_PROXY:
+            fwd = (self.headers.get("X-Forwarded-For") or "").split(",")[0].strip()
+            if fwd:
+                return fwd
+        return self.client_address[0]
+
     def log_message(self, fmt, *args):
-        sys.stderr.write("%s %s\n" % (self.address_string(), fmt % args))
+        sys.stderr.write("%s %s\n" % (self.client_ip(), fmt % args))
 
     # ---- helpers
     def send_json(self, obj, status=200, headers=None):
@@ -726,7 +737,7 @@ class Handler(http.server.BaseHTTPRequestHandler):
         if not self.csrf_ok():
             return self.send_json({"error": "bad request"}, 400)
         data = self.body_json()
-        ip = self.client_address[0]
+        ip = self.client_ip()
 
         if path == "/api/login":
             if too_many_fails(ip):

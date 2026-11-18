@@ -1,4 +1,4 @@
-# Packs everything in .\files into three archives: ZIP, RAR, 7z.
+﻿# Packs everything in .\files into three archives: ZIP, RAR, 7z.
 # Run again whenever you add or replace files:   powershell -ExecutionPolicy Bypass -File .\build-archives.ps1
 # Needs: Windows 10/11 built-in tar.exe (ZIP + 7z) and WinRAR (RAR).
 # Video/PPTX are already compressed, so files are stored without recompression (fast, same size).

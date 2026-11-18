@@ -1,0 +1,35 @@
+# DOMAIN берётся из .env. Для домена Caddy сам получит и будет продлевать HTTPS-сертификат.
+# Без домена укажите DOMAIN=:80 (сайт будет по http://IP-адрес, без шифрования).
+{$DOMAIN} {
+	# сжимаем только текст: видео и архивы и так сжаты, а сжатие ломало бы перемотку
+	encode {
+		gzip
+		match {
+			header Content-Type text/*
+			header Content-Type application/javascript*
+			header Content-Type application/json*
+			header Content-Type image/svg+xml*
+		}
+	}
+
+	reverse_proxy app:8765 {
+		# видео и большие файлы отдаём потоком, без буферизации
+		flush_interval -1
+		transport http {
+			read_timeout 0
+			write_timeout 0
+		}
+	}
+
+	header {
+		Strict-Transport-Security "max-age=31536000"
+		X-Frame-Options "SAMEORIGIN"
+		Referrer-Policy "same-origin"
+		-Server
+	}
+
+	log {
+		output stdout
+		format console
+	}
+}

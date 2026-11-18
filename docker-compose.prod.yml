@@ -1,0 +1,40 @@
+# Боевой запуск на VDS: сайт + Caddy (автоматический HTTPS от Let's Encrypt).
+#   cp .env.example .env   # указать DOMAIN
+#   docker compose -f docker-compose.prod.yml up -d --build
+services:
+  app:
+    build: .
+    image: hettich-materials:latest
+    restart: unless-stopped
+    environment:
+      SECURE_COOKIES: "${SECURE_COOKIES:-1}"
+      TRUST_PROXY: "1"            # настоящий адрес посетителя берётся из заголовка Caddy
+      MAX_UPLOAD_GB: "${MAX_UPLOAD_GB:-10}"
+    volumes:
+      - ./files:/app/files
+      - ./archives:/app/archives
+      - ./assets:/app/assets
+      - ./data:/app/data
+    # порт наружу не открыт: сайт доступен только через Caddy
+    expose:
+      - "8765"
+
+  caddy:
+    image: caddy:2.8
+    restart: unless-stopped
+    depends_on:
+      - app
+    ports:
+      - "${HTTP_PORT:-80}:80"
+      - "${HTTPS_PORT:-443}:443"
+      - "${HTTPS_PORT:-443}:443/udp"
+    environment:
+      DOMAIN: "${DOMAIN:?Укажите DOMAIN в файле .env}"
+    volumes:
+      - ./deploy/Caddyfile:/etc/caddy/Caddyfile:ro
+      - caddy_data:/data
+      - caddy_config:/config
+
+volumes:
+  caddy_data:
+  caddy_config:
