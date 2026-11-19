@@ -1,10 +1,15 @@
 FROM python:3.13-slim
 
 # bsdtar собирает архив 7z, rar (раздел non-free Debian) — архив RAR. ZIP делает сам Python.
+# ffmpeg — обложки и длительность видео; LibreOffice + poppler — слайды презентаций и обложки PDF;
+# шрифты — чтобы кириллица на слайдах не превращалась в «квадратики».
 RUN sed -i 's/^Components: main$/Components: main non-free/' /etc/apt/sources.list.d/debian.sources \
  && apt-get update \
  && apt-get install -y --no-install-recommends libarchive-tools \
+      ffmpeg poppler-utils libreoffice-impress \
+      fonts-dejavu-core fonts-liberation fonts-liberation-sans-narrow fonts-crosextra-carlito fonts-crosextra-caladea \
  && (apt-get install -y --no-install-recommends rar || echo "rar недоступен — архив RAR собираться не будет") \
+ && fc-cache -f \
  && rm -rf /var/lib/apt/lists/*
 
 ENV PYTHONUNBUFFERED=1 \

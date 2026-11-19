@@ -189,12 +189,15 @@ def sync_materials():
 
 
 def delete_material(con, r):
-    """Удаляет файл, его обложку (если она загружена через сайт) и запись в каталоге."""
+    """Удаляет файл, его обложку и слайды (если их сделал сайт) и запись в каталоге."""
     with contextlib.suppress(FileNotFoundError):
         os.remove(os.path.join(FILES, r["file"]))
     if re.fullmatch(r"covers/m\d+-\w+\.jpg", r["cover"] or ""):
         with contextlib.suppress(OSError):
             os.remove(os.path.join(ROOT, "assets", r["cover"]))
+    meta = json.loads(r["meta"] or "{}")
+    if re.fullmatch(r"slides/m\d+", meta.get("slides_dir") or ""):
+        shutil.rmtree(os.path.join(ROOT, "assets", meta["slides_dir"]), ignore_errors=True)
     con.execute("DELETE FROM materials WHERE id = ?", (r["id"],))
 
 
@@ -353,6 +356,184 @@ class Archiver:
 
 
 ARCHIVER = None
+
+# ---------------------------------------------------------------- превью: обложки видео и слайды презентаций
+
+FFMPEG, FFPROBE = shutil.which("ffmpeg"), shutil.which("ffprobe")
+SOFFICE = shutil.which("soffice") or shutil.which("libreoffice")
+PDFTOPPM = shutil.which("pdftoppm")
+PRES_EXTS = {"pptx", "ppt", "pps", "ppsx", "potx", "odp"}
+MAX_SLIDES = 300
+
+
+class Previewer:
+    """Фоновая очередь: для загруженных файлов сервер сам готовит превью.
+    Видео — обложка (удачный кадр), длительность, качество; презентации — все слайды картинками;
+    PDF — обложка из первой страницы. По одному файлу за раз, с пониженным приоритетом."""
+
+    def __init__(self):
+        self.lock = threading.Lock()
+        self.pending = []      # id в очереди
+        self.current = None    # id, который сейчас обрабатывается
+        self.event = threading.Event()
+        threading.Thread(target=self.loop, daemon=True).start()
+
+    @staticmethod
+    def needs(r):
+        meta = json.loads(r["meta"] or "{}")
+        if meta.get("preview_failed"):
+            return False
+        ext = r["file"].rsplit(".", 1)[-1].lower() if "." in r["file"] else ""
+        if r["kind"] == "video" and FFMPEG and FFPROBE:
+            return not r["cover"] or not meta.get("duration")
+        if ext in PRES_EXTS and SOFFICE and PDFTOPPM:
+            return not meta.get("slides")
+        if ext == "pdf" and PDFTOPPM:
+            return not r["cover"]
+        return False
+
+    def request(self, mid):
+        with self.lock:
+            if mid != self.current and mid not in self.pending:
+                self.pending.append(mid)
+        self.event.set()
+
+    def scan(self, rows):
+        for r in rows:
+            if self.needs(r):
+                self.request(r["id"])
+
+    def busy_ids(self):
+        with self.lock:
+            return ([self.current] if self.current else []) + list(self.pending)
+
+    def loop(self):
+        while True:
+            self.event.wait()
+            with self.lock:
+                if not self.pending:
+                    self.event.clear()
+                    continue
+                self.current = self.pending.pop(0)
+            try:
+                self.process(self.current)
+            except Exception as ex:  # noqa: BLE001 — один неудачный файл не должен останавливать очередь
+                sys.stderr.write(f"preview failed for material {self.current}: {ex}\n")
+                self.update(self.current, meta={"preview_failed": 1})
+            finally:
+                with self.lock:
+                    self.current = None
+
+    @staticmethod
+    def run(cmd, timeout, **kw):
+        # nice — чтобы обработка не мешала сайту отвечать посетителям
+        prefix = ["nice", "-n", "15"] if shutil.which("nice") else []
+        return subprocess.run(prefix + cmd, capture_output=True, timeout=timeout, check=True, **kw)
+
+    def update(self, mid, cover=None, meta=None):
+        with db() as con:
+            r = con.execute("SELECT cover, meta FROM materials WHERE id = ?", (mid,)).fetchone()
+            if not r:
+                return
+            m = json.loads(r["meta"] or "{}")
+            m.update(meta or {})
+            con.execute("UPDATE materials SET cover = ?, meta = ? WHERE id = ?",
+                        (cover if cover and not r["cover"] else r["cover"], json.dumps(m, ensure_ascii=False), mid))
+
+    def process(self, mid):
+        with db() as con:
+            r = con.execute("SELECT * FROM materials WHERE id = ?", (mid,)).fetchone()
+        if not r or not self.needs(r):
+            return
+        path = os.path.join(FILES, r["file"])
+        if not os.path.isfile(path):
+            return
+        ext = r["file"].rsplit(".", 1)[-1].lower()
+        if r["kind"] == "video":
+            self.video(r, path)
+        elif ext in PRES_EXTS:
+            self.slides(r, path)
+        elif ext == "pdf":
+            self.pdf_cover(r, path)
+
+    def video(self, r, path):
+        info = json.loads(self.run([FFPROBE, "-v", "error", "-select_streams", "v:0", "-show_entries",
+                                    "format=duration:stream=width,height", "-of", "json", path], 120).stdout)
+        dur = float((info.get("format") or {}).get("duration") or 0)
+        st = (info.get("streams") or [{}])[0]
+        w, h = int(st.get("width") or 0), int(st.get("height") or 0)
+        quality = "4K" if h >= 2160 else "Full HD" if h >= 1080 else "HD" if h >= 720 else "SD"
+        t = min(dur * 0.25, 30) if dur else 0
+        meta = {"duration": round(dur, 1), "width": w, "height": h, "quality": quality, "preview": int(t)}
+        cover = None
+        if not r["cover"]:
+            fn = f"m{r['id']}-{secrets.token_hex(3)}.jpg"
+            out = os.path.join(COVERS, fn)
+            # thumbnail=60 выбирает самый «типичный» кадр из 60 подряд — без чёрных и смазанных
+            self.run([FFMPEG, "-v", "error", "-y", "-ss", f"{t:.2f}", "-i", path, "-vf",
+                      "thumbnail=60,scale='min(1280,iw)':-2", "-frames:v", "1", "-q:v", "3", out], 300)
+            if os.path.isfile(out) and os.path.getsize(out) > 1000:
+                cover = "covers/" + fn
+        self.update(r["id"], cover=cover, meta=meta)
+
+    def slides(self, r, path):
+        rel = f"slides/m{r['id']}"
+        out_dir = os.path.join(ROOT, "assets", rel)
+        tmp = os.path.join(ROOT, "assets", f".tmp-m{r['id']}")
+        shutil.rmtree(tmp, ignore_errors=True)
+        os.makedirs(tmp)
+        try:
+            src = self.slim_copy(path, tmp)
+            # LibreOffice: презентация → PDF. HOME во временной папке — ему нужен свой профиль.
+            env = dict(os.environ, HOME=tmp)
+            self.run([SOFFICE, "--headless", "--norestore", "--nolockcheck", "--convert-to", "pdf",
+                      "--outdir", tmp, src], 1800, env=env)
+            pdf = next((os.path.join(tmp, f) for f in os.listdir(tmp) if f.lower().endswith(".pdf")), None)
+            if not pdf:
+                raise RuntimeError("LibreOffice не сделал PDF")
+            self.run([PDFTOPPM, "-jpeg", "-jpegopt", "quality=85", "-scale-to-x", "1280", "-scale-to-y", "-1",
+                      "-l", str(MAX_SLIDES), pdf, os.path.join(tmp, "p")], 900)
+            pages = sorted(f for f in os.listdir(tmp) if f.startswith("p-") and f.endswith(".jpg"))
+            if not pages:
+                raise RuntimeError("нет страниц")
+            shutil.rmtree(out_dir, ignore_errors=True)
+            os.makedirs(out_dir)
+            for i, f in enumerate(pages, 1):
+                os.replace(os.path.join(tmp, f), os.path.join(out_dir, "slide%02d.jpg" % i))
+            self.update(r["id"], meta={"slides": len(pages), "slides_dir": rel, "slide_ext": "jpg", "cover_slide": 1})
+        finally:
+            shutil.rmtree(tmp, ignore_errors=True)
+
+    MEDIA_EXTS = (".mp4", ".m4v", ".mov", ".avi", ".wmv", ".mkv", ".webm", ".mpg", ".mpeg",
+                  ".mp3", ".wav", ".m4a", ".wma", ".ogg", ".aac")
+
+    def slim_copy(self, path, tmp):
+        """Копия презентации без встроенных видео и аудио. Для картинок слайдов они не нужны
+        (на слайде рисуется кадр-заставка), а LibreOffice грузит их в память целиком —
+        презентация на 1 ГБ с роликами не помещалась в память сервера."""
+        ext = path.rsplit(".", 1)[-1].lower()
+        if ext not in ("pptx", "ppsx", "potx", "odp"):
+            return path
+        try:
+            zin = zipfile.ZipFile(path)
+        except zipfile.BadZipFile:
+            return path
+        out = os.path.join(tmp, "slim." + ext)
+        with zin, zipfile.ZipFile(out, "w", zipfile.ZIP_DEFLATED, allowZip64=True) as zout:
+            for info in zin.infolist():
+                data = b"" if info.filename.lower().endswith(self.MEDIA_EXTS) else zin.read(info)
+                zout.writestr(info, data)  # тот же порядок и способ сжатия (для .odp важно)
+        return out
+
+    def pdf_cover(self, r, path):
+        fn = f"m{r['id']}-{secrets.token_hex(3)}"
+        self.run([PDFTOPPM, "-jpeg", "-jpegopt", "quality=85", "-f", "1", "-l", "1", "-singlefile",
+                  "-scale-to-x", "960", "-scale-to-y", "-1", path, os.path.join(COVERS, fn)], 300)
+        if os.path.isfile(os.path.join(COVERS, fn + ".jpg")):
+            self.update(r["id"], cover=f"covers/{fn}.jpg")
+
+
+PREVIEWER = None
 
 # ---------------------------------------------------------------- passwords
 
@@ -766,7 +947,9 @@ class Handler(http.server.BaseHTTPRequestHandler):
                 rows = con.execute("""SELECT m.*, u.name AS uploader FROM materials m
                                       LEFT JOIN users u ON u.id = m.uploaded_by
                                       ORDER BY m.pinned DESC, m.created_at DESC""").fetchall()
-            return self.send_json({"materials": [dict(material_json(r),
+            PREVIEWER.scan(rows)  # всё, чему не хватает обложки или слайдов, — в очередь
+            return self.send_json({"processing": PREVIEWER.busy_ids(),
+                                   "materials": [dict(material_json(r),
                                                       can_edit=bool(user) and may_edit(user, r),
                                                       uploader=r["uploader"] if user else None)  # имена сотрудников посетителям не показываем
                                                  for r in rows],
@@ -874,6 +1057,7 @@ class Handler(http.server.BaseHTTPRequestHandler):
                                   (name, title, kind_of(name), length, int(time.time()), user["id"]))
                 row = con.execute("SELECT * FROM materials WHERE id = ?", (cur.lastrowid,)).fetchone()
             ARCHIVER.request()
+            PREVIEWER.request(row["id"])
             return self.send_json(material_json(row))
 
         m = re.fullmatch(r"/api/materials/(\d+)/cover", u.path)
@@ -1123,7 +1307,11 @@ if __name__ == "__main__":
     sync_materials()
     ARCHIVER = Archiver()
     ARCHIVER.check_on_start()
+    PREVIEWER = Previewer()
+    with db() as con:
+        PREVIEWER.scan(con.execute("SELECT * FROM materials").fetchall())
     print(f"Архивы: ZIP — да, 7z — {'да' if TAR7Z else 'нет (нужен bsdtar)'}, RAR — {'да' if RAR else 'нет (нужен rar)'}")
+    print(f"Превью: видео — {'да' if FFMPEG else 'нет (нужен ffmpeg)'}, презентации — {'да' if SOFFICE and PDFTOPPM else 'нет (нужен LibreOffice)'}, PDF — {'да' if PDFTOPPM else 'нет'}")
     srv = http.server.ThreadingHTTPServer((HOST, PORT), Handler)
     srv.daemon_threads = True
     print(f"Hettich · Полезные материалы: http://{HOST}:{PORT}", flush=True)

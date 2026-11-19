@@ -72,6 +72,10 @@ async function loadMaterials() {
   S.items.forEach((m) => { if (!m.cover && VIEWABLE_IMG.has(m.ext) && m.size <= 15 * 1024 * 1024) m.cover = m.url; });
   S.isAdmin = r.is_admin;
   S.isGuest = !!r.guest;
+  // сервер готовит превью (обложки видео, слайды) — пока идёт, тихо обновляем каталог
+  S.processing = new Set(r.processing || []);
+  clearTimeout(S.procTimer);
+  if (S.processing.size) S.procTimer = setTimeout(() => { if (!$('.viewer, .modal-back')) loadMaterials(); else S.procTimer = setTimeout(loadMaterials, 8000); }, 8000);
   S.canUpload = r.can_upload;
   S.maxUpload = r.max_upload;
   const ids = new Set(S.items.map((m) => m.id));
@@ -192,7 +196,9 @@ function thumbHtml(m, { big = false } = {}) {
   if (m.meta.quality) badges.push(m.meta.quality);
   if (m.meta.slides) badges.push(`${m.meta.slides} ${plural(m.meta.slides, 'слайд', 'слайда', 'слайдов')}`);
   if (!m.cover || !['video', 'pres'].includes(m.kind)) badges.push(m.ext.toUpperCase());
-  const flags = [m.pinned && big ? '' : '', isNew(m) ? '<span class="flag">Новое</span>' : ''].join('');
+  const flags = S.processing && S.processing.has(m.id)
+    ? '<span class="flag proc"><i class="spin"></i>Готовим превью…</span>'
+    : (isNew(m) ? '<span class="flag">Новое</span>' : '');
   return `<button class="${cls}" data-open="${m.id}" style="--kc:${k.color}" aria-label="${canPreview(m) ? 'Открыть' : 'Подробнее'}: ${esc(m.title)}">
     ${m.cover ? `<img src="${m.cover}" alt="" loading="lazy">` : `<span class="ph"><span class="ico">${k.icon}</span><span class="ext">${esc(m.ext || '?')}</span></span>`}
     ${isVideo ? '<video muted playsinline preload="none"></video><span class="play">' + ICON.play + '</span><span class="preview-bar"></span>' : ''}
@@ -610,7 +616,7 @@ function openMaterial(m, startSlide) {
     viewer(m, `${kindName} · ${m.ext.toUpperCase()} · ${fmtSize(m.size)}`, `
       <div class="nopreview">
         ${m.cover ? `<img class="pic" src="${m.cover}" alt="" style="max-height:50vh">` : `<span class="ph" style="--kc:${k.color}"><span class="ico">${k.icon}</span><span class="ext">${esc(m.ext || '?')}</span></span>`}
-        <p>${m.description ? esc(m.description) + '<br><br>' : ''}Этот формат открывается после скачивания.</p>
+        <p>${m.description ? esc(m.description) + '<br><br>' : ''}${S.processing && S.processing.has(m.id) ? 'Готовим просмотр в браузере — через пару минут слайды можно будет листать прямо здесь.' : 'Этот формат открывается после скачивания.'}</p>
         <a class="btn" href="${dlUrl(m)}" download>${ICON.download}Скачать · ${fmtSize(m.size)}</a>
       </div>`);
   }
