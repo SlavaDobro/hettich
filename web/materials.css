@@ -8,7 +8,7 @@
 .eyebrow .stripes { gap: 2px; }
 h1.display { margin: 22px 0 22px; font: 700 clamp(48px, 7.4vw, 104px)/.92 var(--font-head); text-transform: uppercase; }
 h1.display span { display: block; }
-h1.display span:last-child { color: transparent; -webkit-text-stroke: 2px var(--ink); }
+h1.display span:last-child { color: var(--ink); }
 .lead { max-width: 560px; margin: 0; font-size: 18px; color: var(--ink-2); }
 .facts { display: flex; flex-wrap: wrap; margin-top: 32px; border-top: 1px solid var(--line); }
 .fact { padding: 16px 28px 0 0; margin-right: 28px; }
@@ -164,7 +164,7 @@ a.fmt:hover .go svg { transform: translateY(2px); }
   background: linear-gradient(var(--kc) 0 18%, transparent 18% 30%, var(--kc) 30% 48%, transparent 48% 60%, var(--kc) 60% 78%, transparent 78%); opacity: .18; }
 .ph .ext { position: relative; font: 700 clamp(38px, 4vw, 54px)/1 var(--font-head); letter-spacing: .02em; text-transform: uppercase; }
 .ph .ext::after { content: ""; display: block; width: 40%; height: 4px; margin: 10px auto 0; background: var(--kc); }
-.ph .ico { position: absolute; left: 14px; top: 14px; width: 22px; height: 22px; color: var(--steel); }
+.ph .ico { position: absolute; right: 12px; bottom: 10px; width: 22px; height: 22px; color: var(--steel); }
 
 .play { position: absolute; left: 50%; top: 50%; z-index: 2; width: 60px; height: 60px; margin: -30px 0 0 -30px; border-radius: 50%; display: grid; place-items: center; background: rgba(255, 255, 255, .92); color: var(--ink); box-shadow: 0 8px 30px rgba(0, 0, 0, .3); transition: transform .3s var(--ease), opacity .3s; }
 .play svg { width: 24px; height: 24px; margin-left: 3px; }
@@ -225,6 +225,7 @@ mark { background: #fff1b8; color: inherit; border-radius: 2px; padding: 0 1px; 
 .row .t { min-width: 0; }
 .row .t b { display: block; font-size: 14.5px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; cursor: pointer; }
 .row .t b:hover { text-decoration: underline; }
+.row .t .r-meta { display: none; }
 .row .t small { display: block; color: var(--steel); font-size: 12.5px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
 .row .k { font-size: 13px; color: var(--ink-2); display: flex; align-items: center; gap: 8px; }
 .row .k i { width: 8px; height: 8px; border-radius: 2px; background: var(--kc); transform: skewY(-30deg); flex: none; }
@@ -549,46 +550,93 @@ textarea.input { height: auto; min-height: 92px; padding: 10px 14px; resize: ver
   .row .k, .row .d { display: none; }
 }
 @media (max-width: 720px) {
-  .hero { padding: 36px 0 28px; }
+  .hero { padding: 28px 0 24px; }
   .lead { font-size: 16px; }
   .facts { display: grid; grid-template-columns: repeat(3, auto); justify-content: start; }
   .fact { padding-right: 14px; margin-right: 0; }
   .fact + .fact { padding-left: 14px; }
   .fact b { font-size: 26px; }
+  .hero-cta { margin-top: 22px; }
   .pack { padding: 22px 18px; }
   .fmt { grid-template-columns: 52px minmax(0, 1fr); }
   .fmt .go { grid-column: 2; }
+
+  /* панель каталога: вкладки листаются вбок — у края мягкое затухание, чтобы это было видно */
   .toolbar { position: static; }
+  .tabs { -webkit-mask-image: linear-gradient(90deg, #000 82%, transparent); mask-image: linear-gradient(90deg, #000 82%, transparent); padding-right: 28px; }
   .tools { flex-wrap: wrap; }
-  .search { flex-basis: 100%; }
-  .search kbd { display: none; }
   .sort { flex: 1; }
   .sort select { width: 100%; }
-  .upload-btn .label { display: none; }
-  .grid { grid-template-columns: 1fr; }
-  .sel { opacity: 1; }
+
+  /* карточки: две колонки компактных карточек вместо одной на весь экран */
+  .grid { grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 22px 12px; }
+  .grid .card-body { padding-top: 10px; }
+  .grid .kicker { font-size: 10px; letter-spacing: .08em; gap: 6px; }
+  .grid .kicker i { width: 7px; height: 7px; }
+  .grid .card h3 { font-size: 14px; margin: 4px 0 6px; }
+  .grid .card p.desc { display: none; }
+  .grid .card-foot { padding-top: 8px; gap: 2px; }
+  .grid .meta { font-size: 11.5px; }
+  .grid .meta b { font-size: 12.5px; }
+  .grid .ib { width: 32px; height: 32px; }
+  .grid .ib[data-link] { display: none; }
+  .grid .play { width: 44px; height: 44px; margin: -22px 0 0 -22px; }
+  .grid .play svg { width: 18px; height: 18px; }
+  .grid .badges { left: 8px; right: 8px; bottom: 7px; gap: 4px; }
+  .grid .badge { font-size: 10px; padding: 2px 6px; }
+  .grid .flags { right: 7px; top: 7px; }
+  .grid .flag { font-size: 9.5px; padding: 2px 6px; }
+  .grid .ph .ext { font-size: 26px; }
+  .grid .ph .ext::after { margin-top: 6px; height: 3px; }
+  .grid .ph::before { width: 90px; height: 90px; right: -20px; top: -26px; }
+
   .result-head h2, .result-head .count, .sec-head h2, .sec-head .count { font-size: 30px; }
+  .sec-head { gap: 10px 14px; }
   .sec-head .more { margin-left: 0; }
   .kinds { grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 10px; }
   .kind-tile { padding: 16px; }
   .kind-tile b { font-size: 18px; }
   .all-cta a { padding: 20px; }
   .all-cta b { font-size: 24px; }
-  .all-cta span { display: none; }
+  .all-cta .go { width: 44px; height: 44px; }
+  .page-top { padding: 24px 0 18px; }
   .page-top-side { margin-left: 0; }
   .hblock { padding-top: 40px; }
   .result-head .hint { display: none; }
+
+  /* список: название в две строки, под ним тип и размер вместо имени файла */
   .row { grid-template-columns: 26px 64px minmax(0, 1fr) auto; gap: 10px; }
   .row .s { display: none; }
   .row .a .ib:not(.dl) { display: none; }
-  .selbar { padding: 10px; flex-wrap: wrap; }
+  .row .t b { white-space: normal; display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; line-height: 1.3; font-size: 14px; }
+  .row .t .r-file { display: none; }
+  .row .t .r-meta { display: block; }
+
+  .selbar { padding: 10px; flex-wrap: wrap; bottom: 10px; }
   .selbar .info { flex-basis: 100%; }
   .selbar .btn { flex: 1; }
-  .stage { padding: 10px; }
-  .stage .nav { display: none; }
+  .selbar .sep { display: none; }
+
+  /* просмотр: подпись в одну строку, у слайдов — компактные стрелки поверх краёв */
+  .viewer-head { padding: 10px 10px 10px 14px; gap: 8px; }
+  .viewer-head .t span { display: block; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
   .viewer-head .btn .label { display: none; }
+  .viewer-head .btn { width: 40px; padding: 0; }
+  .stage { padding: 10px; }
+  .stage .nav { width: 38px; height: 38px; background: rgba(0, 0, 0, .5); }
+  .stage .nav.prev { left: 6px; }
+  .stage .nav.next { right: 6px; }
+  .strip button { width: 84px; }
   .uploads { right: 12px; bottom: 12px; }
   .cover-edit { grid-template-columns: 1fr; }
+}
+
+/* Галочка выбора на телефоне: видна всегда (наведения нет), поэтому — аккуратный кружок, а не белый квадрат */
+@media (hover: none) {
+  .sel { opacity: 1; width: 28px; height: 28px; border-radius: 50%; background: rgba(18, 18, 18, .3); border: 2px solid rgba(255, 255, 255, .95); box-shadow: 0 1px 4px rgba(0, 0, 0, .3); }
+  .sel svg { width: 16px; height: 16px; }
+  .card.selected .sel { background: var(--ink); border-color: #fff; }
+  .row .sel { border-radius: 4px; border: 1.5px solid #c4c7cc; background: #fff; box-shadow: none; }
 }
 
 /* Сервер готовит превью */

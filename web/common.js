@@ -24,6 +24,7 @@ const ICON = {
   video: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linejoin="round"><rect x="3" y="5" width="13" height="14" rx="2"/><path d="m16 10 5-3v10l-5-3z"/></svg>',
   chevL: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="m15 5-7 7 7 7"/></svg>',
   chevR: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="m9 5 7 7-7 7"/></svg>',
+  search: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><circle cx="11" cy="11" r="7"/><path d="m20 20-4-4"/></svg>',
   upload: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round"><path d="M12 16V4m0 0-5 5m5-5 5 5M4 20h16"/></svg>',
   shield: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linejoin="round"><path d="M12 3 4.5 6v5.5c0 4.6 3.2 8.4 7.5 9.5 4.3-1.1 7.5-4.9 7.5-9.5V6z"/><circle cx="12" cy="11" r="2"/><path d="M12 13v3"/></svg>',
   archive: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linejoin="round"><rect x="3" y="4" width="18" height="5" rx="1"/><path d="M5 9v10a1 1 0 0 0 1 1h12a1 1 0 0 0 1-1V9M10 13h4"/></svg>',
@@ -172,6 +173,7 @@ async function mountTopbar(active) {
         <kbd aria-hidden="true">/</kbd>
       </form>
       <nav>
+        <button class="nav-link hs-toggle" type="button" aria-label="Поиск" aria-expanded="false">${ICON.search}</button>
         <a class="nav-link nav-main" href="${SITE.all}" ${active === 'all' ? 'aria-current="page"' : ''}>${ICON.grid}<span class="label">Все материалы</span></a>
         ${me.role === 'admin' ? `
           <a class="nav-link" href="${SITE.admin}" ${active === 'admin' ? 'aria-current="page"' : ''}>${ICON.users}<span class="label">Сотрудники</span></a>` : ''}
@@ -217,8 +219,18 @@ async function mountTopbar(active) {
     else location.href = SITE.all + (q ? '?q=' + encodeURIComponent(q) : '');
   };
   document.addEventListener('keydown', (e) => {
-    if (e.key === '/' && !e.target.matches('input, textarea, select') && !$('.viewer, .modal-back')) { e.preventDefault(); hq.focus(); }
+    if (e.key === '/' && !e.target.matches('input, textarea, select') && !$('.viewer, .modal-back')) { e.preventDefault(); openSearch(); }
   });
+
+  // На телефоне строка поиска спрятана за значком 🔍 — шапка остаётся в одну строку
+  const hst = $('.hs-toggle', bar);
+  const openSearch = () => { bar.classList.add('search-open'); hst.setAttribute('aria-expanded', 'true'); hq.focus(); };
+  const closeSearch = () => { bar.classList.remove('search-open'); hst.setAttribute('aria-expanded', 'false'); };
+  hst.onclick = (e) => { e.stopPropagation(); bar.classList.contains('search-open') ? closeSearch() : openSearch(); };
+  document.addEventListener('click', (e) => { if (!e.target.closest('.hsearch, .hs-toggle')) closeSearch(); });
+  hq.addEventListener('keydown', (e) => { if (e.key === 'Escape') closeSearch(); });
+  if (hq.value) hst.classList.add('has-q');
+  hq.addEventListener('input', () => hst.classList.toggle('has-q', !!hq.value.trim()));
 
   // Кнопка «Загрузить»: на страницах с материалами открывает окно, на остальных — ведёт в каталог
   const hup = $('#hup', bar);

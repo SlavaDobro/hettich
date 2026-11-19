@@ -107,11 +107,23 @@ button { font: inherit; color: inherit; }
   .nav-link { padding: 0 10px; }
   .btn.hup { padding: 0 16px; }
 }
+.hs-toggle { display: none; }
 @media (max-width: 720px) {
-  .topbar .wrap { flex-wrap: wrap; height: auto; padding: 8px 0 10px; row-gap: 8px; }
+  /* Телефон: шапка в одну строку, поиск открывается значком 🔍 и выпадает под шапкой */
+  .topbar .wrap { position: relative; flex-wrap: nowrap; height: 60px; padding: 0; }
   .brand-title { display: none; }
-  .hsearch { order: 5; flex-basis: 100%; max-width: none; margin: 0; }
+  .hsearch { display: none; position: absolute; left: 0; right: 0; top: 100%; max-width: none; margin: 0;
+    padding: 8px 0 10px; background: #fff; box-shadow: 0 12px 24px -12px rgba(18, 18, 18, .25); }
+  .topbar.search-open .hsearch { display: block; animation: pop .16s var(--ease); }
+  .hsearch svg { top: 20px; }
   .hsearch kbd { display: none; }
+  .hs-toggle { display: inline-flex; width: 42px; padding: 0; justify-content: center; position: relative; }
+  .hs-toggle svg { width: 20px; height: 20px; }
+  .hs-toggle.has-q::after { content: ""; position: absolute; top: 9px; right: 9px; width: 7px; height: 7px; border-radius: 50%; background: var(--s-red); }
+  .topbar.search-open .hs-toggle { background: var(--mist); color: var(--ink); }
+  .topbar nav { gap: 4px; }
+  .nav-link { height: 42px; }
+  .nav-link.nav-main, .nav-link.staff-in { width: 42px; padding: 0; justify-content: center; }
   .btn.hup .label { display: none; }
   .btn.hup { width: 42px; padding: 0; margin-left: 2px; }
 }
@@ -251,10 +263,6 @@ button { font: inherit; color: inherit; }
 .hint-small { margin: 0; font-size: 12.5px; color: var(--steel); text-align: center; }
 .link-btn { border: 0; background: none; padding: 0; color: var(--sky-ink); font: 600 13px var(--font); cursor: pointer; text-decoration: underline; text-underline-offset: 3px; }
 .link-btn:hover { color: var(--ink); }
-@media (max-width: 720px) {
-  .notice-bar .wrap { flex-wrap: wrap; }
-  .notice-bar .btn { width: 100%; }
-}
 
 /* ---------- Тост ---------- */
 .toast {
@@ -271,7 +279,12 @@ button { font: inherit; color: inherit; }
 .foot-brand { display: flex; align-items: center; gap: 8px; }
 
 @media (max-width: 720px) {
-  .topbar .wrap { height: auto; min-height: 60px; gap: 8px 12px; }
+  .topbar .wrap { gap: 8px; }
+  .foot { margin-top: 56px; }
+  .notice-bar { font-size: 13px; }
+  .notice-bar .wrap { flex-wrap: nowrap; gap: 10px; }
+  .notice-bar .btn { width: auto; flex: none; height: 34px; padding: 0 12px; font-size: 12.5px; }
+  .notice-bar span b { display: block; }
   .brand svg { width: 62px; }
   .brand-sep, .brand-title small { display: none; }
   .brand-title { font-size: 13px; }

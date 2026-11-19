@@ -236,7 +236,7 @@ function rowHtml(m) {
   return `<div class="row ${S.selected.has(m.id) ? 'selected' : ''}" data-id="${m.id}" style="--kc:${k.color}">
     ${selBox(m)}
     ${thumbHtml(m)}
-    <div class="t"><b data-open="${m.id}" title="${esc(m.title)}">${hl(m.title)}</b><small>${esc(m.file)}${m.uploader ? ` · загрузил(а) ${esc(m.uploader)}` : ''}</small></div>
+    <div class="t"><b data-open="${m.id}" title="${esc(m.title)}">${hl(m.title)}</b><small class="r-file">${esc(m.file)}${m.uploader ? ` · загрузил(а) ${esc(m.uploader)}` : ''}</small><small class="r-meta">${k.one} · ${esc(m.ext.toUpperCase())} · ${fmtSize(m.size)}</small></div>
     <div class="k"><i></i>${k.one}</div>
     <div class="s">${fmtSize(m.size)}</div>
     <div class="d">${fmtDay(m.created_at)}</div>
@@ -626,7 +626,7 @@ function openSlides(m, start) {
   const total = m.meta.slides;
   const strip = Array.from({ length: total }, (_, k) =>
     `<button data-n="${k + 1}" aria-label="Слайд ${k + 1}"><img src="${slideUrl(m, k + 1)}" alt="" loading="lazy"><span>${k + 1}</span></button>`).join('');
-  const { el, handlers } = viewer(m, `Презентация · ${total} слайдов · <span class="counter"></span>`,
+  const { el, handlers } = viewer(m, `Презентация · ${total} ${plural(total, 'слайд', 'слайда', 'слайдов')} · <span class="counter"></span>`,
     `<button class="icon-btn nav prev" aria-label="Предыдущий">${ICON.chevL}</button><img class="slide" alt=""><button class="icon-btn nav next" aria-label="Следующий">${ICON.chevR}</button>`,
     { strip });
   let n = start;
