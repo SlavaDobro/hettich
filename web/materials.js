@@ -71,6 +71,7 @@ async function loadMaterials() {
   // картинка без отдельной обложки (например, положена прямо в папку) — показываем её саму
   S.items.forEach((m) => { if (!m.cover && VIEWABLE_IMG.has(m.ext) && m.size <= 15 * 1024 * 1024) m.cover = m.url; });
   S.isAdmin = r.is_admin;
+  S.isGuest = !!r.guest;
   S.canUpload = r.can_upload;
   S.maxUpload = r.max_upload;
   const ids = new Set(S.items.map((m) => m.id));
@@ -360,6 +361,7 @@ async function renderFormats() {
   let r = { archives: {}, building: false };
   try { r = await api('/api/archives'); } catch (_) { /* без архивов */ }
   const info = r.archives;
+  S.archives = info;
   $('#formats').innerHTML = ARCHIVE_FORMATS.map((f) => {
     const a = info[f.ext];
     if (!a) return `<div class="fmt off" style="--c:${f.color}"><span class="tag">${f.label}</span><span><b>Архив .${f.ext}</b><small>${r.building ? 'Собирается…' : 'Недоступен на этом сервере'}</small></span></div>`;
@@ -952,8 +954,236 @@ function editModal(m) {
   };
 }
 
+/* =============================== Скачивание для посетителей =============================== */
+/* Посетитель без входа скачивает через короткую заявку: имя, почта, телефон, комментарий.
+   Данные запоминаются только в его браузере — в следующий раз форма заполняется в один клик. */
+const LEAD_KEY = 'lead';
+const LEAD_CHIPS = ['Для клиента', 'Для выставки', 'Для дизайн-проекта', 'Для обучения', 'Для соцсетей'];
+const loadLead = () => { try { return JSON.parse(store.get(LEAD_KEY, 'null')); } catch (_) { return null; } };
+
+/* Что скачивает посетитель — по адресу ссылки, на которую он нажал */
+function targetFromHref(href) {
+  if (href.startsWith(SITE.zip)) {
+    const ids = (new URL(href, location.href).searchParams.get('ids') || '').split(',').map(Number).filter(Boolean);
+    return ids.length ? { type: 'zip', ids } : null;
+  }
+  if (href.startsWith(SITE.archives + '/')) {
+    const ext = href.split('?')[0].split('.').pop();
+    return { type: 'archive', ext };
+  }
+  const m = S.items.find((x) => dlUrl(x) === href);
+  return m ? { type: 'file', id: m.id } : null;
+}
+
+/* Телефон: российские номера — по маске +7 (999) 123-45-67, остальные — как ввели */
+function formatPhone(raw, prevDigits) {
+  let d = raw.replace(/\D/g, '');
+  if (raw.trim().startsWith('+') && d && d[0] !== '7') return '+' + raw.trim().slice(1).replace(/[^\d\s()-]/g, '').slice(0, 21);  // зарубежный — как ввели
+  if (!d) return '';
+  if (prevDigits !== undefined && d.length === prevDigits.length && raw.length < formatPhone(prevDigits).length) d = d.slice(0, -1);  // стёрли скобку/дефис — стираем и цифру
+  if (d[0] === '8') d = '7' + d.slice(1);
+  if (d[0] !== '7') d = '7' + d;
+  d = d.slice(0, 11);
+  const p = [d.slice(1, 4), d.slice(4, 7), d.slice(7, 9), d.slice(9, 11)];
+  let s = '+7';
+  if (p[0]) s += ' (' + p[0] + (p[0].length === 3 ? ')' : '');
+  if (p[1]) s += ' ' + p[1];
+  if (p[2]) s += '-' + p[2];
+  if (p[3]) s += '-' + p[3];
+  return s;
+}
+
+const leadCheck = {
+  name: (v) => (v.trim().length >= 2 ? '' : 'Как к вам обращаться?'),
+  email: (v) => (/^[^@\s<>]+@[^@\s<>]+\.[^@\s<>]{2,}$/.test(v.trim()) ? '' : 'Проверьте почту — например, name@mail.ru'),
+  phone: (v) => { const n = v.replace(/\D/g, '').length; return n >= 11 || (v.trim().startsWith('+') && n >= 7) ? '' : 'Проверьте номер телефона'; },
+};
+
+function leadTicket(target) {
+  if (target.type === 'file') {
+    const m = byId(target.id);
+    const k = KIND[m.kind] || KIND.other;
+    return {
+      cover: m.cover ? `<img src="${m.cover}" alt="">` : `<span class="lt-ext" style="--kc:${k.color}">${esc(m.ext)}</span>`,
+      title: m.title, meta: `${k.one} · ${m.ext.toUpperCase()} · ${fmtSize(m.size)}`, size: m.size,
+    };
+  }
+  if (target.type === 'zip') {
+    const items = target.ids.map(byId).filter(Boolean);
+    const size = items.reduce((s, m) => s + m.size, 0);
+    const fan = items.slice(0, 3).map((m, i) => m.cover
+      ? `<img src="${m.cover}" alt="" style="--i:${i}">`
+      : `<span class="lt-ext" style="--i:${i};--kc:${(KIND[m.kind] || KIND.other).color}">${esc(m.ext)}</span>`).join('');
+    return {
+      cover: `<span class="lt-fan">${fan}</span>`,
+      title: `${items.length} ${plural(items.length, 'файл', 'файла', 'файлов')} одним архивом`,
+      meta: `ZIP · ${fmtSize(size)}`, size,
+    };
+  }
+  const f = ARCHIVE_FORMATS.find((x) => x.ext === target.ext) || ARCHIVE_FORMATS[0];
+  const a = (S.archives || {})[target.ext];
+  return {
+    cover: `<span class="lt-ext lt-arch" style="--kc:${f.color}">${f.label}</span>`,
+    title: 'Все материалы одним архивом', meta: `${S.items.length} ${plural(S.items.length, 'файл', 'файла', 'файлов')} · .${f.ext}${a ? ' · ' + fmtSize(a.size) : ''}`,
+    size: a ? a.size : 0,
+  };
+}
+
+function openLeadModal(target) {
+  const t = leadTicket(target);
+  const saved = loadLead();
+  const field = (id, label, type, ac, extra = '') => `
+    <div class="fl" data-f="${id}">
+      <input id="ld-${id}" name="${id}" type="${type}" placeholder=" " autocomplete="${ac}" ${extra} required>
+      <label for="ld-${id}">${label}</label>
+      <span class="fl-ok" aria-hidden="true">${ICON.check}</span>
+      <small class="fl-err" aria-live="polite"></small>
+    </div>`;
+  const md = modal(`
+    <div class="lead-ticket">
+      <span class="lt-cover">${t.cover}</span>
+      <div class="lt-text"><small>Вы скачиваете</small><b title="${esc(t.title)}">${esc(t.title)}</b><span>${esc(t.meta)}</span></div>
+      <span class="stripes lt-stripes" aria-hidden="true"><i></i><i></i><i></i><i></i></span>
+    </div>
+    <form class="lead-form" novalidate>
+      <div class="lead-head"><h3>Оставьте контакты</h3><p>И файл сразу начнёт скачиваться.</p></div>
+      ${saved ? `
+      <div class="lead-prev" id="ld-prev">
+        <span class="avatar">${esc(initials(saved.name))}</span>
+        <div class="lp-text"><b>Это вы?</b><span>${esc([saved.name, saved.email, saved.phone].filter(Boolean).join(' · '))}</span></div>
+        <button type="button" class="btn small" data-prefill>${ICON.check}Заполнить из предыдущей формы</button>
+      </div>` : ''}
+      <div class="lead-grid">
+        ${field('name', 'Имя и фамилия', 'text', 'name', 'maxlength="100" autocapitalize="words"')}
+        ${field('email', 'Почта', 'email', 'email', 'maxlength="200" inputmode="email" spellcheck="false"')}
+        ${field('phone', 'Телефон', 'tel', 'tel', 'maxlength="22" inputmode="tel"')}
+      </div>
+      <div class="fl fl-area" data-f="comment">
+        <textarea id="ld-comment" name="comment" placeholder=" " maxlength="1000" rows="2"></textarea>
+        <label for="ld-comment">Комментарий <span>— необязательно</span></label>
+      </div>
+      <div class="lead-chips" aria-label="Быстрый комментарий">${LEAD_CHIPS.map((c) => `<button type="button" class="chip" data-chip="${esc(c)}">${esc(c)}</button>`).join('')}</div>
+      <label class="check lead-consent"><input type="checkbox" id="ld-consent"> Согласен(на) на обработку персональных данных для связи по материалам</label>
+      <label class="check lead-remember"><input type="checkbox" id="ld-remember" checked> Запомнить меня в этом браузере</label>
+      <div class="form-error" aria-live="polite"></div>
+      <button class="btn block lead-go" type="submit">${ICON.download}<span>Скачать${t.size ? ' · ' + fmtSize(t.size) : ''}</span></button>
+    </form>`);
+  const box = md.el.querySelector('.modal');
+  box.classList.add('lead-modal');
+  const f = $('form', box), err = $('.form-error', f), go = $('.lead-go', f);
+  const inp = (id) => $('#ld-' + id, f);
+
+  // проверка полей на лету: ошибка — после ухода с поля, галочка — когда всё верно
+  const validate = (id, show) => {
+    const v = inp(id).value, msg = leadCheck[id](v), w = inp(id).closest('.fl');
+    w.classList.toggle('ok', !msg);
+    if (show || w.classList.contains('bad')) { w.classList.toggle('bad', !!msg); $('.fl-err', w).textContent = msg; }
+    return !msg;
+  };
+  ['name', 'email', 'phone'].forEach((id) => {
+    inp(id).addEventListener('input', () => validate(id, false));
+    inp(id).addEventListener('blur', () => { if (inp(id).value) validate(id, true); });
+  });
+  let prevDigits = '';
+  inp('phone').addEventListener('input', (e) => {
+    const el = e.target;
+    const deleting = e.inputType && e.inputType.startsWith('delete');
+    el.value = formatPhone(el.value, deleting ? prevDigits : undefined);
+    prevDigits = el.value.replace(/\D/g, '');
+    validate('phone', false);
+  });
+
+  // чипы: быстрые варианты комментария
+  const syncChips = () => $$('.chip', f).forEach((c) => c.classList.toggle('on', inp('comment').value.includes(c.dataset.chip)));
+  $$('.chip', f).forEach((c) => c.onclick = () => {
+    const ta = inp('comment'), text = c.dataset.chip;
+    if (ta.value.includes(text)) ta.value = ta.value.replace(text, '').replace(/^[,\s]+|[,\s]+$/g, '').replace(/,\s*,/g, ',');
+    else ta.value = ta.value.trim() ? ta.value.trim().replace(/[,.]?$/, ', ') + text : text;
+    syncChips();
+  });
+  inp('comment').addEventListener('input', syncChips);
+
+  // «Заполнить из предыдущей формы»
+  const prefill = () => {
+    inp('name').value = saved.name || ''; inp('email').value = saved.email || '';
+    inp('phone').value = saved.phone || ''; prevDigits = inp('phone').value.replace(/\D/g, '');
+    inp('comment').value = saved.comment || '';
+    $('#ld-consent', f).checked = true;
+    ['name', 'email', 'phone'].forEach((id) => validate(id, true));
+    syncChips();
+    const card = $('#ld-prev', f);
+    card.classList.add('done');
+    card.querySelector('[data-prefill]').innerHTML = `${ICON.check}Заполнено`;
+    go.focus();
+  };
+  if (saved) $('[data-prefill]', f).onclick = prefill;
+
+  f.onsubmit = async (e) => {
+    e.preventDefault();
+    err.textContent = '';
+    const okAll = ['name', 'email', 'phone'].map((id) => validate(id, true)).every(Boolean);
+    const consent = $('#ld-consent', f).checked;
+    $('.lead-consent', f).classList.toggle('bad', !consent);
+    if (!okAll || !consent) {
+      err.textContent = !okAll ? 'Проверьте отмеченные поля' : 'Отметьте согласие на обработку данных';
+      (f.querySelector('.fl.bad input') || $('#ld-consent', f)).focus();
+      return;
+    }
+    const lead = { name: inp('name').value.trim(), email: inp('email').value.trim(), phone: inp('phone').value.trim(), comment: inp('comment').value.trim() };
+    go.disabled = true; go.querySelector('span').textContent = 'Готовим файл…';
+    try {
+      const r = await api('/api/download-request', { ...lead, consent: true, target });
+      if ($('#ld-remember', f).checked) store.set(LEAD_KEY, JSON.stringify({ ...lead, at: Date.now() }));
+      else { try { localStorage.removeItem('hm.' + LEAD_KEY); } catch (_) { /* */ } }
+      startDownload(r.url);
+      leadSuccess(box, t, r.url, md);
+    } catch (ex) {
+      err.textContent = ex.message;
+      go.disabled = false; go.querySelector('span').textContent = 'Скачать' + (t.size ? ' · ' + fmtSize(t.size) : '');
+    }
+  };
+  setTimeout(() => (saved ? $('[data-prefill]', f) : inp('name')).focus(), 60);
+}
+
+function startDownload(url) {
+  const a = Object.assign(document.createElement('a'), { href: url, download: '' });
+  document.body.append(a); a.click(); a.remove();
+}
+
+function leadSuccess(box, t, url, md) {
+  const f = $('form', box);
+  f.outerHTML = `
+    <div class="lead-done">
+      <span class="ld-burst" aria-hidden="true"><i></i><i></i><i></i><i></i></span>
+      <span class="ld-ok">${ICON.check}</span>
+      <h3>Скачивание началось</h3>
+      <p>Спасибо! Файл появится в папке «Загрузки».</p>
+      <a class="ld-again" href="${url}" download>Не началось? Скачать по ссылке</a>
+      <button class="btn ghost" type="button" data-close>Готово</button>
+    </div>`;
+  $('[data-close]', box).onclick = md.close;
+  $('[data-close]', box).focus();
+}
+
+/* Нажатия «Скачать» у посетителя: вместо прямой ссылки — заявка */
+function bindGuestDownloads() {
+  document.addEventListener('click', (e) => {
+    if (!S.isGuest) return;
+    const a = e.target.closest('a[href]');
+    if (!a || a.closest('.lead-done')) return;
+    const href = a.getAttribute('href');
+    if (!(href.includes('?dl=1') || href.startsWith(SITE.zip) || href.startsWith(SITE.archives + '/'))) return;
+    const target = targetFromHref(href);
+    if (!target) return;
+    e.preventDefault();
+    e.stopPropagation();
+    openLeadModal(target);
+  }, true);
+}
+
 /* =============================== События =============================== */
 function bindEvents() {
+  bindGuestDownloads();
   document.addEventListener('click', (e) => {
     const t = e.target;
     const tab = t.closest('.tab');

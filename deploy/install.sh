@@ -38,7 +38,9 @@ else
 fi
 
 # 2. Код сайта
-if [ -d "$DIR/.git" ]; then
+if [ -f "$DIR/server.py" ] && [ ! -d "$DIR/.git" ]; then
+  say "Код уже скопирован в $DIR — беру его, без GitHub"
+elif [ -d "$DIR/.git" ]; then
   say "Обновляю код в $DIR"
   git -C "$DIR" pull --ff-only
 else

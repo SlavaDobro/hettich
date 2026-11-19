@@ -73,6 +73,16 @@ tbody tr:hover { background: #fafafa; }
 .muted { color: var(--steel); font-size: 13px; white-space: nowrap; }
 .empty { padding: 48px 20px; text-align: center; color: var(--steel); }
 
+.leads { margin-top: 24px; }
+.leads .box-head h2 { display: flex; align-items: center; gap: 10px; }
+.leads-count { font-size: 12px; font-weight: 700; background: var(--s-red); color: #fff; border-radius: 10px; padding: 1px 8px; }
+.leads-count:empty { display: none; }
+.leads .search { margin-left: auto; }
+.lead-who { display: grid; gap: 1px; min-width: 190px; }
+.lead-who b { font-size: 14.5px; }
+.lead-who a { font-size: 13px; color: var(--sky-ink); text-decoration: none; width: fit-content; }
+.lead-who a:hover { text-decoration: underline; }
+.lead-what { font-size: 13.5px; }
 .top-files { list-style: none; margin: 0; padding: 8px 0; }
 .top-files li { display: grid; grid-template-columns: 1fr auto; gap: 4px 12px; padding: 10px 20px; font-size: 13px; }
 .top-files li span { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
@@ -161,9 +171,25 @@ tbody tr:hover { background: #fafafa; }
     <aside class="box">
       <div class="box-head"><h2>Что скачивают</h2></div>
       <ul class="top-files" id="top"></ul>
-      
     </aside>
   </div>
+
+  <section class="box leads" id="leads">
+    <div class="box-head">
+      <h2>Заявки на скачивание <span class="leads-count" id="leads-count"></span></h2>
+      <label class="search"><span class="sr-only">Поиск по заявкам</span>
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><circle cx="11" cy="11" r="7"/><path d="m20 20-4-4"/></svg>
+        <input class="input" id="lq" placeholder="Имя, почта, телефон, файл" autocomplete="off">
+      </label>
+      <a class="btn small light" id="leads-csv" href="/api/requests.csv" download>Скачать для Excel</a>
+    </div>
+    <div style="overflow-x:auto">
+      <table>
+        <thead><tr><th>Когда</th><th>Контакт</th><th>Что скачивал</th><th>Комментарий</th><th></th></tr></thead>
+        <tbody id="lead-rows"></tbody>
+      </table>
+    </div>
+  </section>
 </main>
 
 <footer class="foot">
@@ -198,10 +224,46 @@ const niceFile = (f) => f.title
 
 let state = { users: [], downloads: { total: 0, by_file: [] }, me: 0 };
 
+let leads = { total: 0, items: [] };
+
 async function load() {
-  state = await api('/api/users');
+  [state, leads] = await Promise.all([api('/api/users'), api('/api/requests')]);
   render();
+  renderLeads();
 }
+
+/* ---------- Заявки посетителей на скачивание ---------- */
+const telHref = (p) => 'tel:' + String(p).replace(/[^\d+]/g, '');
+function renderLeads() {
+  const q = $('#lq').value.trim().toLowerCase();
+  const list = leads.items.filter((r) => !q || [r.name, r.email, r.phone, r.target, r.comment].join(' ').toLowerCase().includes(q));
+  $('#leads-count').textContent = leads.total || '';
+  $('#leads-csv').hidden = !leads.total;
+  $('#lead-rows').innerHTML = list.length ? list.map((r) => `
+    <tr data-lead="${r.id}">
+      <td data-l="Когда"><span class="muted">${shortDate(r.at)}</span></td>
+      <td><div class="lead-who"><b>${esc(r.name)}</b>
+        <a href="mailto:${esc(r.email)}">${esc(r.email)}</a>
+        <a href="${esc(telHref(r.phone))}">${esc(r.phone)}</a></div></td>
+      <td data-l="Скачивал"><span class="lead-what">${esc(r.target)}</span>${r.downloaded ? '' : ' <span class="pill wait" title="Заявку оставили, но файл ещё не скачался">не скачан</span>'}</td>
+      <td data-l="Комментарий"><span class="muted">${esc(r.comment) || '—'}</span></td>
+      <td><div class="actions"><button class="act del" data-ldel="${r.id}" title="Удалить заявку" aria-label="Удалить заявку">${I.del}</button></div></td>
+    </tr>`).join('')
+    : `<tr><td colspan="5" class="empty">${q ? 'Ничего не нашли' : 'Заявок пока нет. Они появятся, когда посетители начнут скачивать материалы.'}</td></tr>`;
+}
+$('#lq').oninput = renderLeads;
+$('#lead-rows').addEventListener('click', async (e) => {
+  const b = e.target.closest('[data-ldel]');
+  if (!b) return;
+  const r = leads.items.find((x) => x.id === +b.dataset.ldel);
+  if (!await confirmModal('Удалить заявку?', `Заявка «${esc(r.name)}» будет удалена.`, 'Удалить', true)) return;
+  try {
+    await api(`/api/requests/${r.id}/delete`, {});
+    leads.items = leads.items.filter((x) => x !== r); leads.total--;
+    renderLeads();
+    toast('Заявка удалена');
+  } catch (ex) { toast(ex.message); }
+});
 
 function statusOf(u) {
   if (!u.active) return ['off', 'Заблокирован'];
@@ -215,8 +277,8 @@ function render() {
   $('#stats').innerHTML = [
     ['var(--s-blue)', us.length, 'всего в системе'],
     ['var(--s-green)', us.filter((u) => u.active && u.last_login).length, 'уже пользуются'],
-    ['var(--s-yellow)', us.filter((u) => u.active && !u.last_login).length, 'ещё не входили'],
-    ['var(--s-red)', state.downloads.total, 'скачиваний'],
+    ['var(--s-yellow)', state.downloads.total, 'скачиваний'],
+    ['var(--s-red)', leads.total, 'заявок от посетителей'],
   ].map(([c, n, l]) => `<div class="stat" style="--c:${c}"><b>${n}</b><span>${l}</span></div>`).join('');
 
   const q = $('#q').value.trim().toLowerCase();

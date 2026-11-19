@@ -37,6 +37,8 @@ body { min-height: 100vh; display: grid; grid-template-columns: minmax(0, 1.15fr
 .form h1 { margin: 0; font: 700 44px/1 var(--font-head); text-transform: uppercase; }
 .form .intro { margin: -6px 0 6px; color: var(--steel); font-size: 15px; }
 .form .btn { height: 50px; font-size: 15px; }
+.back-link { justify-self: start; font-size: 13px; font-weight: 600; color: var(--steel); text-decoration: none; margin-bottom: -6px; }
+.back-link:hover { color: var(--ink); }
 .help { margin-top: 10px; padding-top: 18px; border-top: 1px solid var(--line); font-size: 13px; color: var(--steel); line-height: 1.5; }
 .shake { animation: shake .4s; }
 @keyframes shake { 20%, 60% { transform: translateX(-6px); } 40%, 80% { transform: translateX(6px); } }
@@ -64,9 +66,10 @@ body { min-height: 100vh; display: grid; grid-template-columns: minmax(0, 1.15fr
 
 <main class="panel">
   <form class="form" id="form" autocomplete="on" novalidate>
-    <div class="kicker"><span class="stripes"><i></i><i></i><i></i><i></i></span>Полезные материалы</div>
+    <a class="back-link" href="/">← К материалам</a>
+    <div class="kicker"><span class="stripes"><i></i><i></i><i></i><i></i></span>Для сотрудников</div>
     <h1>Вход</h1>
-    <p class="intro">Логин и пароль выдаёт администратор.</p>
+    <p class="intro">Логин и пароль выдаёт администратор. Смотреть и скачивать материалы можно без входа.</p>
     <div class="field">
       <label for="login">Логин</label>
       <input class="input" id="login" name="username" autocomplete="username" required autocapitalize="off" spellcheck="false">

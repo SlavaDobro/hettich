@@ -165,7 +165,7 @@ async function mountTopbar(active) {
   bar.innerHTML = `
     <div class="wrap">
       <a class="brand" href="${SITE.home}" aria-label="На главную">${LOGO}<span class="brand-sep"></span>
-        <span class="brand-title">Полезные материалы<small>для сотрудников и партнёров</small></span></a>
+        <span class="brand-title">Полезные материалы<small>${me.guest ? 'видео, презентации и каталоги' : 'для сотрудников и партнёров'}</small></span></a>
       <form class="hsearch" role="search" action="${SITE.all}">
         <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" aria-hidden="true"><circle cx="11" cy="11" r="7"/><path d="m20 20-4-4"/></svg>
         <input id="hq" name="q" type="search" placeholder="Поиск по материалам" autocomplete="off" aria-label="Поиск по материалам">
@@ -176,6 +176,7 @@ async function mountTopbar(active) {
         ${me.role === 'admin' ? `
           <a class="nav-link" href="${SITE.admin}" ${active === 'admin' ? 'aria-current="page"' : ''}>${ICON.users}<span class="label">Сотрудники</span></a>` : ''}
         ${me.can_upload ? `<button class="btn hup" id="hup" type="button" title="Загрузить файлы на сайт">${ICON.upload}<span class="label">Загрузить</span></button>` : ''}
+        ${me.guest ? `<a class="nav-link staff-in" href="${SITE.login}" title="Вход для сотрудников">${ICON.key}<span class="label">Вход для сотрудников</span></a>` : `
         <div class="user-menu">
           <button class="nav-link user-btn" aria-haspopup="true" aria-expanded="false">
             <span class="avatar">${esc(initials(me.name))}</span>
@@ -187,14 +188,16 @@ async function mountTopbar(active) {
             <hr>
             <button data-act="out" role="menuitem">${ICON.logout}Выйти</button>
           </div>
-        </div>
+        </div>`}
       </nav>
     </div>`;
-  const btn = $('.user-btn', bar), dd = $('.dropdown', bar);
-  btn.onclick = (e) => { e.stopPropagation(); const o = dd.classList.toggle('open'); btn.setAttribute('aria-expanded', o); };
-  document.addEventListener('click', () => { dd.classList.remove('open'); btn.setAttribute('aria-expanded', 'false'); });
-  $('[data-act=pw]', bar).onclick = () => passwordModal(false);
-  $('[data-act=out]', bar).onclick = async () => { await api('/api/logout', {}); location.href = SITE.login; };
+  if (!me.guest) {
+    const btn = $('.user-btn', bar), dd = $('.dropdown', bar);
+    btn.onclick = (e) => { e.stopPropagation(); const o = dd.classList.toggle('open'); btn.setAttribute('aria-expanded', o); };
+    document.addEventListener('click', () => { dd.classList.remove('open'); btn.setAttribute('aria-expanded', 'false'); });
+    $('[data-act=pw]', bar).onclick = () => passwordModal(false);
+    $('[data-act=out]', bar).onclick = async () => { await api('/api/logout', {}); location.href = SITE.home; };
+  }
 
   // Поиск в шапке: на странице «Все материалы» фильтрует сразу, на остальных — ведёт туда
   const hq = $('#hq', bar);

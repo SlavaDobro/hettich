@@ -116,6 +116,17 @@ def init_db():
             user_id INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,
             expires INTEGER NOT NULL
         );
+        CREATE TABLE IF NOT EXISTS requests (
+            id INTEGER PRIMARY KEY,
+            at INTEGER NOT NULL,
+            name TEXT NOT NULL,
+            email TEXT NOT NULL,
+            phone TEXT NOT NULL,
+            comment TEXT NOT NULL DEFAULT '',
+            target TEXT NOT NULL,
+            ip TEXT NOT NULL DEFAULT '',
+            downloaded INTEGER NOT NULL DEFAULT 0
+        );
         CREATE TABLE IF NOT EXISTS downloads (
             id INTEGER PRIMARY KEY,
             user_id INTEGER REFERENCES users(id) ON DELETE SET NULL,
@@ -370,6 +381,48 @@ def check_pw(pw, stored):
 DUMMY_HASH = hash_pw(secrets.token_hex(8))
 FAILS = {}  # ip -> [timestamps]  (простая защита от перебора)
 
+# ---------------------------------------------------------------- скачивание для посетителей
+# Посетитель без входа скачивает только по одноразовой ссылке, которую выдаёт форма заявки.
+DL_TOKENS = {}   # токен -> {"kind": file|archive|zip, "key": ..., "exp": время, "req": id заявки}
+DL_TTL = 1800    # ссылка живёт 30 минут (браузер может докачивать файл частями)
+LEAD_HITS = {}   # ip -> [timestamps]  (не больше 20 заявок в час с одного адреса)
+LEAD_LIMIT = 20
+
+EMAIL_RE = re.compile(r"^[^@\s<>]+@[^@\s<>]+\.[^@\s<>]{2,}$")
+
+
+def issue_token(kind, key, req_id):
+    now = time.time()
+    for t in [t for t, d in DL_TOKENS.items() if d["exp"] < now]:
+        DL_TOKENS.pop(t, None)
+    tok = secrets.token_urlsafe(18)
+    DL_TOKENS[tok] = {"kind": kind, "key": key, "exp": now + DL_TTL, "req": req_id}
+    return tok
+
+
+def check_token(tok, kind, key):
+    d = DL_TOKENS.get(tok or "")
+    if d and d["exp"] > time.time() and d["kind"] == kind and d["key"] == key:
+        return d
+    return None
+
+
+def lead_limited(ip):
+    now = time.time()
+    LEAD_HITS[ip] = [t for t in LEAD_HITS.get(ip, []) if now - t < 3600]
+    if len(LEAD_HITS[ip]) >= LEAD_LIMIT:
+        return True
+    LEAD_HITS[ip].append(now)
+    return False
+
+
+def csv_cell(v):
+    """Ячейка CSV для Excel: без формул (защита от CSV-инъекций), кавычки экранируются."""
+    s = str(v if v is not None else "")
+    if s[:1] in ("=", "+", "-", "@", "\t", "\r"):
+        s = "'" + s
+    return '"' + s.replace('"', '""') + '"'
+
 
 def too_many_fails(ip):
     now = time.time()
@@ -544,18 +597,21 @@ class Handler(http.server.BaseHTTPRequestHandler):
         p = os.path.realpath(os.path.join(base, urllib.parse.unquote(rel)))
         return p if p.startswith(base + os.sep) else None
 
-    def log_download(self, user, path):
+    def log_download(self, user, path, token=None):
         with db() as con:
-            con.execute("INSERT INTO downloads (user_id, path, at) VALUES (?,?,?)", (user["id"], path, int(time.time())))
+            con.execute("INSERT INTO downloads (user_id, path, at) VALUES (?,?,?)",
+                        (user["id"] if user else None, path, int(time.time())))
+            if token:
+                con.execute("UPDATE requests SET downloaded = 1 WHERE id = ?", (token["req"],))
 
-    def stream_zip(self, user, ids):
+    def stream_zip(self, user, ids, token=None):
         with db() as con:
             q = ",".join("?" * len(ids))
             rows = con.execute(f"SELECT file FROM materials WHERE id IN ({q}) ORDER BY title", ids).fetchall()
         files = [r["file"] for r in rows if os.path.isfile(os.path.join(FILES, r["file"]))]
         if not files:
             return self.send_error(404)
-        self.log_download(user, f"zip/{len(files)}")
+        self.log_download(user, f"zip/{len(files)}", token)
         self.send_response(200)
         self.send_header("Content-Type", "application/zip")
         self.send_header("Content-Disposition", self.disposition("Hettich_vybrannoe.zip"))
@@ -573,6 +629,77 @@ class Handler(http.server.BaseHTTPRequestHandler):
         except (ConnectionResetError, BrokenPipeError, ConnectionAbortedError):
             pass
 
+    def need_form(self):
+        """Прямая ссылка на скачивание без заявки: понятная страница вместо голой ошибки."""
+        body = ("<!doctype html><meta charset='utf-8'><meta name='viewport' content='width=device-width,initial-scale=1'>"
+                "<title>Скачивание · Hettich · Полезные материалы</title>"
+                "<body style='margin:0;min-height:100vh;display:grid;place-items:center;font:16px system-ui,sans-serif;background:#f1f2f2;color:#121212'>"
+                "<div style='max-width:420px;padding:32px;background:#fff;border-radius:8px;text-align:center'>"
+                "<h1 style='margin:0 0 10px;font-size:24px'>Скачивание по заявке</h1>"
+                "<p style='color:#666977'>Чтобы скачать файл, нажмите «Скачать» на сайте и оставьте контакты — это займёт полминуты.</p>"
+                "<a href='/' style='display:inline-block;margin-top:8px;padding:12px 22px;background:#121212;color:#fff;border-radius:4px;text-decoration:none;font-weight:600'>Перейти к материалам</a>"
+                "</div></body>").encode("utf-8")
+        self.send_response(403)
+        self.send_header("Content-Type", "text/html; charset=utf-8")
+        self.send_header("Content-Length", str(len(body)))
+        self.send_header("Cache-Control", "no-store")
+        self.end_headers()
+        if self.command != "HEAD":
+            self.wfile.write(body)
+
+    def download_request(self, data, ip):
+        """Посетитель оставил контакты → сохраняем заявку и выдаём одноразовую ссылку на скачивание."""
+        name = str(data.get("name", "")).strip()[:100]
+        email = str(data.get("email", "")).strip()[:200]
+        phone = str(data.get("phone", "")).strip()[:40]
+        comment = str(data.get("comment", "")).strip()[:1000]
+        errors = {}
+        if len(name) < 2:
+            errors["name"] = "Как к вам обращаться?"
+        if not EMAIL_RE.match(email):
+            errors["email"] = "Проверьте почту"
+        digits = re.sub(r"\D", "", phone)
+        if not re.fullmatch(r"[\d\s()+\-.]+", phone or "x") or not 7 <= len(digits) <= 15:
+            errors["phone"] = "Проверьте телефон"
+        if not data.get("consent"):
+            errors["consent"] = "Нужно согласие на обработку данных"
+        if errors:
+            return self.send_json({"error": "Проверьте поля формы", "fields": errors}, 400)
+        if lead_limited(ip):
+            return self.send_json({"error": "Слишком много заявок. Попробуйте через час."}, 429)
+
+        target = data.get("target") or {}
+        kind = target.get("type")
+        with db() as con:
+            if kind == "file":
+                r = con.execute("SELECT * FROM materials WHERE id = ?", (int(target.get("id") or 0),)).fetchone()
+                if not r or not os.path.isfile(os.path.join(FILES, r["file"])):
+                    return self.send_json({"error": "Файл не найден"}, 404)
+                label, tkind, key = r["title"], "file", r["file"]
+                url = f"/files/{urllib.parse.quote(r['file'])}?dl=1&t="
+            elif kind == "zip":
+                ids = sorted({int(x) for x in (target.get("ids") or []) if str(x).isdigit()})[:500]
+                rows = con.execute(f"SELECT id, title FROM materials WHERE id IN ({','.join('?' * len(ids))})", ids).fetchall() if ids else []
+                if not rows:
+                    return self.send_json({"error": "Файлы не найдены"}, 404)
+                ids = sorted(r["id"] for r in rows)
+                titles = ", ".join(r["title"] for r in rows)
+                label = f"Выбранное одним ZIP ({len(rows)}): " + (titles[:300] + "…" if len(titles) > 300 else titles)
+                tkind, key = "zip", ",".join(map(str, ids))
+                url = f"/zip?ids={key}&t="
+            elif kind == "archive":
+                ext = str(target.get("ext", ""))
+                fn = f"{ARCHIVE_NAME}.{ext}"
+                if ext not in ("zip", "rar", "7z") or not os.path.isfile(os.path.join(ARCHIVES, fn)):
+                    return self.send_json({"error": "Архив ещё не готов"}, 404)
+                label, tkind, key = f"Всё одним архивом .{ext}", "archive", fn
+                url = f"/archives/{urllib.parse.quote(fn)}?dl=1&t="
+            else:
+                return self.send_json({"error": "Не указано, что скачать"}, 400)
+            cur = con.execute("""INSERT INTO requests (at, name, email, phone, comment, target, ip)
+                                 VALUES (?,?,?,?,?,?,?)""", (int(time.time()), name, email, phone, comment, label, ip))
+        return self.send_json({"ok": True, "url": url + issue_token(tkind, key, cur.lastrowid)})
+
     # ---- routing
     def do_HEAD(self):
         self.do_GET()
@@ -582,12 +709,13 @@ class Handler(http.server.BaseHTTPRequestHandler):
         path, qs = u.path, urllib.parse.parse_qs(u.query)
         user = self.current_user()
 
+        # Главная и каталог открыты всем: посетители смотрят и скачивают через форму заявки
         if path == "/login":
             return self.redirect("/") if user else self.serve_file(os.path.join(ROOT, "web", "login.html"))
         if path in ("/", "/index.html"):
-            return self.serve_file(os.path.join(ROOT, "web", "index.html")) if user else self.redirect("/login")
+            return self.serve_file(os.path.join(ROOT, "web", "index.html"))
         if path in ("/all", "/all/"):
-            return self.serve_file(os.path.join(ROOT, "web", "all.html")) if user else self.redirect("/login")
+            return self.serve_file(os.path.join(ROOT, "web", "all.html"))
         if path == "/admin":
             if not user:
                 return self.redirect("/login")
@@ -596,43 +724,55 @@ class Handler(http.server.BaseHTTPRequestHandler):
             return self.serve_file(os.path.join(ROOT, "web", "admin.html"))
         if path.startswith("/web/"):
             return self.serve_file(self.safe_join("web", path[5:]))
+        tok = qs.get("t", [""])[0]
         if path == "/zip":
-            if not user:
-                return self.send_error(401)
-            ids = [int(x) for x in (qs.get("ids", [""])[0]).split(",") if x.isdigit()][:500]
-            return self.stream_zip(user, ids) if ids else self.send_error(400)
+            ids = sorted({int(x) for x in (qs.get("ids", [""])[0]).split(",") if x.isdigit()})[:500]
+            if not ids:
+                return self.send_error(400)
+            token = None if user else check_token(tok, "zip", ",".join(map(str, ids)))
+            if not user and not token:
+                return self.need_form()
+            return self.stream_zip(user, ids, token)
 
         top, _, rest = path.lstrip("/").partition("/")
         if top in PROTECTED:
-            if not user:
-                return self.send_error(401)
             p = self.safe_join(PROTECTED[top], rest)
             if not p or os.path.basename(p).startswith("."):
                 return self.send_error(404)
             dl = qs.get("dl") == ["1"]
+            token = None
+            if not user:
+                # обложки и слайды — всем; файлы — смотреть всем, скачивать по ссылке из заявки; архивы — только по ссылке
+                kind = {"files": "file", "archives": "archive"}.get(top)
+                if kind and (dl or top == "archives"):
+                    token = check_token(tok, kind, os.path.basename(p))
+                    if not token:
+                        return self.need_form()
             rng = self.headers.get("Range") or ""
             first_chunk = not rng or rng.startswith("bytes=0-")  # докачки не считаем повторно
             if dl and top in ("files", "archives") and os.path.isfile(p) and self.command == "GET" and first_chunk:
-                self.log_download(user, f"{top}/{os.path.basename(p)}")
-            return self.serve_file(p, download=dl, user_content=True)
+                self.log_download(user, f"{top}/{os.path.basename(p)}", token)
+            return self.serve_file(p, download=dl or top == "archives", user_content=True)
 
         if not path.startswith("/api/"):
             return self.send_error(404)
-        if not user:
-            return self.send_json({"error": "unauthorized"}, 401)
 
+        # ---- открытые для посетителей
         if path == "/api/me":
-            return self.send_json(user_public(user))
+            return self.send_json(user_public(user) if user else {"guest": True})
         if path == "/api/materials":
             sync_materials()
             with db() as con:
                 rows = con.execute("""SELECT m.*, u.name AS uploader FROM materials m
                                       LEFT JOIN users u ON u.id = m.uploaded_by
                                       ORDER BY m.pinned DESC, m.created_at DESC""").fetchall()
-            return self.send_json({"materials": [dict(material_json(r), can_edit=may_edit(user, r), uploader=r["uploader"])
+            return self.send_json({"materials": [dict(material_json(r),
+                                                      can_edit=bool(user) and may_edit(user, r),
+                                                      uploader=r["uploader"] if user else None)  # имена сотрудников посетителям не показываем
                                                  for r in rows],
-                                   "is_admin": user["role"] == "admin",
-                                   "can_upload": may_upload(user),
+                                   "is_admin": bool(user) and user["role"] == "admin",
+                                   "can_upload": bool(user) and may_upload(user),
+                                   "guest": not user,
                                    "max_upload": MAX_UPLOAD})
         if path == "/api/archives":
             out = {}
@@ -642,7 +782,36 @@ class Handler(http.server.BaseHTTPRequestHandler):
                 if os.path.isfile(fp) and not fn.startswith(".") and ext in ("zip", "rar", "7z"):
                     out[ext] = {"name": fn, "size": os.path.getsize(fp), "mtime": int(os.path.getmtime(fp))}
             return self.send_json({"archives": out, "building": ARCHIVER.state["building"] or ARCHIVER.event.is_set(),
-                                   "error": ARCHIVER.state["error"] if user["role"] == "admin" else ""})
+                                   "error": ARCHIVER.state["error"] if user and user["role"] == "admin" else ""})
+
+        # ---- дальше только сотрудники
+        if not user:
+            return self.send_json({"error": "unauthorized"}, 401)
+
+        if path in ("/api/requests", "/api/requests.csv"):
+            if user["role"] != "admin":
+                return self.send_json({"error": "forbidden"}, 403)
+            with db() as con:
+                total = con.execute("SELECT COUNT(*) FROM requests").fetchone()[0]
+                rows = con.execute("SELECT * FROM requests ORDER BY at DESC" + ("" if path.endswith(".csv") else " LIMIT 500")).fetchall()
+            if path.endswith(".csv"):
+                head = ["Дата", "Имя", "Почта", "Телефон", "Комментарий", "Что скачивал", "Скачано", "IP"]
+                lines = [";".join(csv_cell(h) for h in head)]
+                for r in rows:
+                    lines.append(";".join(csv_cell(v) for v in (
+                        time.strftime("%d.%m.%Y %H:%M", time.localtime(r["at"])), r["name"], r["email"], r["phone"],
+                        r["comment"], r["target"], "да" if r["downloaded"] else "нет", r["ip"])))
+                body = ("﻿" + "\r\n".join(lines) + "\r\n").encode("utf-8")  # BOM — чтобы Excel открыл кириллицу
+                self.send_response(200)
+                self.send_header("Content-Type", "text/csv; charset=utf-8")
+                self.send_header("Content-Disposition", self.disposition(f"Zayavki_{time.strftime('%Y-%m-%d')}.csv"))
+                self.send_header("Content-Length", str(len(body)))
+                self.send_header("Cache-Control", "no-store")
+                self.end_headers()
+                self.wfile.write(body)
+                return
+            return self.send_json({"total": total, "items": [dict(r) for r in rows]})
+
         if path == "/api/users":
             if user["role"] != "admin":
                 return self.send_json({"error": "forbidden"}, 403)
@@ -781,6 +950,9 @@ class Handler(http.server.BaseHTTPRequestHandler):
             sys.stderr.write(f"recovery key used for {login} from {ip}\n")
             return self.send_json({"ok": True}, headers={"Set-Cookie": self.set_session(r["id"])})
 
+        if path == "/api/download-request":  # заявка посетителя на скачивание → одноразовая ссылка
+            return self.download_request(data, ip)
+
         user = self.current_user()
         if not user:
             return self.send_json({"error": "unauthorized"}, 401)
@@ -861,6 +1033,12 @@ class Handler(http.server.BaseHTTPRequestHandler):
         # ---- admin only below
         if user["role"] != "admin":
             return self.send_json({"error": "forbidden"}, 403)
+
+        m = re.fullmatch(r"/api/requests/(\d+)/delete", path)
+        if m:
+            with db() as con:
+                n = con.execute("DELETE FROM requests WHERE id = ?", (int(m.group(1)),)).rowcount
+            return self.send_json({"ok": True} if n else {"error": "Заявка не найдена"}, 200 if n else 404)
 
         if path == "/api/users":
             name = str(data.get("name", "")).strip()[:120]

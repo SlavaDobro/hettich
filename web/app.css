@@ -200,7 +200,7 @@ button { font: inherit; color: inherit; }
 
 /* ---------- Модальные окна ---------- */
 .modal-back {
-  position: fixed; inset: 0; z-index: 100; display: grid; place-items: center; padding: 16px;
+  position: fixed; inset: 0; z-index: 200; display: grid; place-items: center; padding: 16px;
   background: rgba(18, 18, 18, .55); backdrop-filter: blur(3px);
   animation: fade .2s ease;
 }
@@ -258,7 +258,7 @@ button { font: inherit; color: inherit; }
 
 /* ---------- Тост ---------- */
 .toast {
-  position: fixed; left: 50%; bottom: 24px; z-index: 200; transform: translateX(-50%);
+  position: fixed; left: 50%; bottom: 24px; z-index: 400; transform: translateX(-50%);
   background: var(--ink); color: #fff; padding: 12px 18px; border-radius: 4px; font-size: 14px;
   box-shadow: var(--shadow-lg); display: flex; gap: 10px; align-items: center; animation: rise .25s var(--ease);
 }

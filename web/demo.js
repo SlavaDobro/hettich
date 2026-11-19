@@ -213,6 +213,16 @@
 
     // ---- дальше только администратор
     if (u.role !== 'admin') return E('forbidden', 403);
+    if (path === '/api/requests') {  // заявки посетителей — в демо вымышленные
+      const t = now();
+      const items = [
+        { id: 3, at: t - 3600, name: 'Ирина Клиентова', email: 'irina@example.ru', phone: '+7 (912) 345-67-89', comment: 'Для выставки', target: 'Демо-ролик: полезные материалы', ip: '', downloaded: 1 },
+        { id: 2, at: t - DAY, name: 'Олег Дизайнов', email: 'oleg@example.com', phone: '+7 (921) 000-11-22', comment: 'Для дизайн-проекта', target: 'Всё одним архивом .zip', ip: '', downloaded: 1 },
+        { id: 1, at: t - 3 * DAY, name: 'Peter Guest', email: 'peter@example.com', phone: '+44 20 7946 0958', comment: '', target: 'Пример презентации', ip: '', downloaded: 0 },
+      ];
+      return J({ total: items.length, items });
+    }
+    if (/^\/api\/requests\/\d+\/delete$/.test(path)) return J({ ok: true });
     if (path === '/api/users' && method === 'GET') {
       const count = (uid) => S.downloads.filter((d) => d.user_id === uid).length;
       const by = {};
@@ -301,6 +311,11 @@
     if (href.startsWith('#demo-zip') || href.startsWith('#demo-archives')) {
       e.preventDefault();
       say('В демо-версии архивы не скачиваются — на рабочем сайте здесь будет ZIP');
+      return;
+    }
+    if (href.includes('requests.csv')) {
+      e.preventDefault();
+      say('В демо-версии выгрузка заявок отключена — на рабочем сайте здесь скачается файл для Excel');
       return;
     }
     if (href.startsWith('#demo-nofile')) {
